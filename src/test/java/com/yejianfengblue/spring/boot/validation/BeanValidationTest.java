@@ -6,11 +6,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.lang.annotation.*;
 import java.math.BigDecimal;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.Formatter;
 import java.util.Optional;
 import java.util.Set;
-import javax.validation.ConstraintViolation;
-import javax.validation.Validator;
+import javax.validation.*;
 import javax.validation.constraints.Digits;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;
@@ -44,6 +47,9 @@ class BeanValidationTest {
 
         @Pattern(regexp = "[IO]", message = "is not 'I' or 'O'")
         private String inOutInd;
+
+        @FltDate
+        private String fltDateString;
     }
 
     @Test
@@ -212,5 +218,84 @@ class BeanValidationTest {
         assertTrue(inOutIndViolation.isPresent());
         assertEquals("inOutInd", inOutIndViolation.get().getPropertyPath().toString());
         assertEquals("is not 'I' or 'O'", inOutIndViolation.get().getMessage());
+    }
+
+    /**
+     * The annotated string must have pattern {@link #fltDatePattern}.
+     * <p>
+     * Accepts {@code String}. {@code null} elements are considered valid.
+     * @author yejianfengblue
+     */
+    @Target({ElementType.FIELD, ElementType.PARAMETER})
+    @Retention(RetentionPolicy.RUNTIME)
+    @Documented
+    @Constraint(validatedBy = { FltDate.FltDateValidator.class })
+    private @interface FltDate {
+
+        String fltDatePattern = "ddMMMyy";
+
+        String message() default "is not a valid date in format '" + fltDatePattern + "'";
+
+        Class<?>[] groups() default {};
+
+        Class<? extends Payload>[] payload() default {};
+
+        class FltDateValidator implements ConstraintValidator<FltDate, String> {
+
+            @Override
+            public void initialize(FltDate constraintAnnotation) {}
+
+            @Override
+            public boolean isValid(String value, ConstraintValidatorContext context) {
+
+                if (null == value) {
+                    return true;
+                } else {
+                    try {
+                        DateTimeFormatter.ofPattern(fltDatePattern).parse(value);
+                        return true;
+                    } catch (DateTimeParseException e) {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("@FltDate positive test")
+    void givenStringFieldAnnotatedWithFltDate_WhenAssignMatchedStringAndValidate_ThenNoError() {
+
+        // given
+        ValidatedBean validatedBean = new ValidatedBean();
+        validatedBean.setFltDateString("01Jan2000");
+
+        // when
+        Set<ConstraintViolation<ValidatedBean>> violations = validator.validate(validatedBean);
+
+        // then
+        assertEquals(0, violations.stream()
+                .filter(v -> v.getPropertyPath().toString().equals("inOutInd"))
+                .count());
+    }
+
+    @Test
+    @DisplayName("@FltDate negative test")
+    void givenStringFieldAnnotatedWithFltDate_WhenAssignNotMatchedStringAndValidate_ThenErrorMessage() {
+
+        // given
+        ValidatedBean validatedBean = new ValidatedBean();
+        validatedBean.setFltDateString("not a flt date string");
+
+        // when
+        Set<ConstraintViolation<ValidatedBean>> violations = validator.validate(validatedBean);
+
+        // then
+        Optional<ConstraintViolation<ValidatedBean>> fltDateStringViolation = violations.stream()
+                .filter(v -> v.getPropertyPath().toString().equals("fltDateString"))
+                .findFirst();
+        assertTrue(fltDateStringViolation.isPresent());
+        assertEquals("fltDateString", fltDateStringViolation.get().getPropertyPath().toString());
+        assertEquals("is not a valid date in format '" + FltDate.fltDatePattern + "'", fltDateStringViolation.get().getMessage());
     }
 }
