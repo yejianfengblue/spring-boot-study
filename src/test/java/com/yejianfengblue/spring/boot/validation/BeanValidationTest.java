@@ -1,16 +1,17 @@
 package com.yejianfengblue.spring.boot.validation;
 
 import lombok.Data;
+import org.apache.commons.lang3.math.NumberUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.format.annotation.NumberFormat;
 
 import java.lang.annotation.*;
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.Formatter;
 import java.util.Optional;
 import java.util.Set;
 import javax.validation.*;
@@ -50,6 +51,9 @@ class BeanValidationTest {
 
         @FltDate
         private String fltDateString;
+
+        @Number
+        private String numberString;
     }
 
     @Test
@@ -297,5 +301,73 @@ class BeanValidationTest {
         assertTrue(fltDateStringViolation.isPresent());
         assertEquals("fltDateString", fltDateStringViolation.get().getPropertyPath().toString());
         assertEquals("is not a valid date in format '" + FltDate.fltDatePattern + "'", fltDateStringViolation.get().getMessage());
+    }
+
+    /**
+     * The annotated string must be a valid Java number, which is be validated
+     * with {@link NumberUtils#isCreatable(String)}.
+     * <p>
+     * Accepts {@code String}. {@code null} elements are considered valid.
+     * @author yejianfengblue
+     */
+    @Target({ElementType.FIELD, ElementType.PARAMETER})
+    @Retention(RetentionPolicy.RUNTIME)
+    @Documented
+    @Constraint(validatedBy = { Number.NumberValidator.class })
+    private @interface Number {
+
+        String message() default "is not a number";
+
+        Class<?>[] groups() default {};
+
+        Class<? extends Payload>[] payload() default {};
+
+        class NumberValidator implements ConstraintValidator<Number, String> {
+
+            @Override
+            public void initialize(Number constraintAnnotation) {}
+
+            @Override
+            public boolean isValid(String value, ConstraintValidatorContext context) {
+                return value == null || NumberUtils.isCreatable(value);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("@Number positive test")
+    void givenStringFieldAnnotatedWithNumber_WhenAssignOnlyNumberStringAndValidate_ThenNoError() {
+
+        // given
+        ValidatedBean validatedBean = new ValidatedBean();
+        validatedBean.setFltDateString("0123456789");
+
+        // when
+        Set<ConstraintViolation<ValidatedBean>> violations = validator.validate(validatedBean);
+
+        // then
+        assertEquals(0, violations.stream()
+                .filter(v -> v.getPropertyPath().toString().equals("inOutInd"))
+                .count());
+    }
+
+    @Test
+    @DisplayName("@Number negative test")
+    void givenStringFieldAnnotatedWithNumber_WhenAssignNotNumberStringAndValidate_ThenErrorMessage() {
+
+        // given
+        ValidatedBean validatedBean = new ValidatedBean();
+        validatedBean.setNumberString("not a number string");
+
+        // when
+        Set<ConstraintViolation<ValidatedBean>> violations = validator.validate(validatedBean);
+
+        // then
+        Optional<ConstraintViolation<ValidatedBean>> numberStringViolation = violations.stream()
+                .filter(v -> v.getPropertyPath().toString().equals("numberString"))
+                .findFirst();
+        assertTrue(numberStringViolation.isPresent());
+        assertEquals("numberString", numberStringViolation.get().getPropertyPath().toString());
+        assertEquals("is not a number", numberStringViolation.get().getMessage());
     }
 }
