@@ -8,15 +8,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import javax.persistence.*;
+import javax.transaction.Transactional;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * @author yejianfengblue
  */
-@DataJpaTest(showSql = false)
+@SpringBootTest
+@Transactional
 class JpaDummyTest {
 
     @Autowired
