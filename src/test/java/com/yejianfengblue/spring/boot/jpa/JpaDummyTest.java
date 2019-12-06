@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 /**
  * @author yejianfengblue
  */
-@DataJpaTest
+@DataJpaTest(showSql = false)
 class JpaDummyTest {
 
     @Autowired
