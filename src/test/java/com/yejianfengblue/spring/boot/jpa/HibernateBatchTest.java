@@ -7,6 +7,7 @@ import net.ttddyy.dsproxy.asserts.BaseQueryExecution;
 import net.ttddyy.dsproxy.asserts.PreparedBatchExecution;
 import net.ttddyy.dsproxy.asserts.PreparedBatchExecutionEntry;
 import net.ttddyy.dsproxy.asserts.ProxyTestDataSource;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +42,12 @@ class HibernateBatchTest {
 
     private Logger log = LoggerFactory.getLogger(getClass());
 
+    @BeforeEach
+    public void resetProxyTestDataSource() {
+
+        ptds.reset();
+    }
+
     @Entity
     @Getter
     @Setter
@@ -60,8 +67,6 @@ class HibernateBatchTest {
 
         assertNotNull(batchSize);
         assertNotEquals(0, batchSize);
-
-        ptds.reset();
 
         for (long i = 1; i <= 11; i++) {
 
