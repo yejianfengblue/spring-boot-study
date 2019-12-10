@@ -7,6 +7,8 @@ import net.ttddyy.dsproxy.asserts.BaseQueryExecution;
 import net.ttddyy.dsproxy.asserts.PreparedBatchExecution;
 import net.ttddyy.dsproxy.asserts.PreparedBatchExecutionEntry;
 import net.ttddyy.dsproxy.asserts.ProxyTestDataSource;
+import org.hibernate.Session;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -29,7 +31,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * @author yejianfengblue
  */
-@SpringBootTest(properties = "spring.jpa.properties.hibernate.jdbc.batch_size=5")
+@SpringBootTest(properties = {
+        "spring.jpa.properties.hibernate.jdbc.batch_size=5",
+        "spring.jpa.properties.hibernate.generate_statistics=true"})
 @Import(ProxyTestDataSourceConfig.class)
 @Transactional
 class HibernateBatchTest {
@@ -170,5 +174,12 @@ class HibernateBatchTest {
                 .collect(Collectors.toList());
         assertThat(batchInsert2Params).isEqualTo(List.of(
                 Map.of(1, "dummy 11", 2, 11L)));
+
+        Session session = entityManager.unwrap(Session.class);
+        Statistics statistics = session.getSessionFactory().getStatistics();
+        assertTrue(statistics.isStatisticsEnabled());
+        assertEquals(11L, statistics.getEntityInsertCount());
+        assertEquals(12L, statistics.getPrepareStatementCount());
+        assertEquals(1L, statistics.getFlushCount());
     }
 }
