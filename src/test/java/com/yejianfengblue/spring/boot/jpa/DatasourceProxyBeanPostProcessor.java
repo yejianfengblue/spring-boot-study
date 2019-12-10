@@ -1,13 +1,11 @@
 package com.yejianfengblue.spring.boot.jpa;
 
 import net.ttddyy.dsproxy.listener.logging.SLF4JLogLevel;
-import net.ttddyy.dsproxy.support.ProxyDataSource;
 import net.ttddyy.dsproxy.support.ProxyDataSourceBuilder;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.config.BeanPostProcessor;
-import org.springframework.stereotype.Component;
 import org.springframework.util.ReflectionUtils;
 
 import java.lang.reflect.Method;
@@ -17,12 +15,11 @@ import javax.sql.DataSource;
  * Copied from
  * https://github.com/ttddyy/datasource-proxy-examples/tree/master/springboot-autoconfig-example
  */
-@Component
 public class DatasourceProxyBeanPostProcessor implements BeanPostProcessor {
 
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) {
-        if (bean instanceof DataSource && !(bean instanceof ProxyDataSource)) {
+        if (bean instanceof DataSource) {
             // Instead of directly returning a less specific datasource bean
             // (e.g.: HikariDataSource -> DataSource), return a proxy object.
             // See following links for why:
@@ -48,7 +45,6 @@ public class DatasourceProxyBeanPostProcessor implements BeanPostProcessor {
 
         private ProxyDataSourceInterceptor(final DataSource dataSource) {
             this.dataSource = ProxyDataSourceBuilder.create(dataSource)
-                    .name("MyDS")
                     .multiline()
                     .logQueryBySlf4j(SLF4JLogLevel.INFO)
                     .build();
