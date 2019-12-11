@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import javax.persistence.*;
 import javax.transaction.Transactional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
@@ -55,5 +56,22 @@ class JpaDummyTest {
 
         // then
         assertNotNull(myEntity.getId());
+    }
+
+    @Test
+    void givenNewCreatedEntity_whenDetachAndFindAgain_thenNotSameObject() {
+
+        // given
+        MyEntity myEntity = new MyEntity();
+        myEntity.setMyColumn("dummy");
+
+        entityManager.persist(myEntity);
+
+        // when
+        entityManager.detach(myEntity);
+        MyEntity foundMyEntity = entityManager.find(MyEntity.class, myEntity.getId());
+
+        // then
+        assertThat(foundMyEntity).isNotSameAs(myEntity);
     }
 }
