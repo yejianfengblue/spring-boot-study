@@ -132,15 +132,15 @@ class OneToManyBidirectionalRelationshipLazyFetchTest {
         // then
         assertThat(ptds).hasInsertCount(3);
         assertThat(ptds).hasUpdateCount(0);
-        List<String> insertOrUpdateQueryList = ptds.getPrepareds().stream()
+        List<String> insertQueryList = ptds.getPrepareds().stream()
                 .map(PreparedExecution::getQuery)
                 .map(String::toUpperCase)
                 .filter(query -> query.startsWith("INSERT"))
                 .collect(Collectors.toList());
-        assertThat(insertOrUpdateQueryList).hasSize(3);
-        assertThat(insertOrUpdateQueryList.get(0)).matches("INSERT INTO [\\w_$]*POST( \\w+)? .+");
-        assertThat(insertOrUpdateQueryList.get(1)).matches("INSERT INTO [\\w_$]*POST_COMMENT( \\w+)? .+");
-        assertThat(insertOrUpdateQueryList.get(2)).matches("INSERT INTO [\\w_$]*POST_COMMENT( \\w+)? .+");
+        assertThat(insertQueryList).hasSize(3);
+        assertThat(insertQueryList.get(0)).matches("INSERT INTO [\\w_$]*POST( \\w+)? .+");
+        assertThat(insertQueryList.get(1)).matches("INSERT INTO [\\w_$]*POST_COMMENT( \\w+)? .+");
+        assertThat(insertQueryList.get(2)).matches("INSERT INTO [\\w_$]*POST_COMMENT( \\w+)? .+");
     }
 
     @Test
@@ -169,13 +169,13 @@ class OneToManyBidirectionalRelationshipLazyFetchTest {
 
             assertThat(ptds).hasUpdateCount(0);
             assertThat(ptds).hasDeleteCount(1);
-            List<String> updateOrDeleteQueryList = ptds.getPrepareds().stream()
+            List<String> deleteQueryList = ptds.getPrepareds().stream()
                     .map(PreparedExecution::getQuery)
                     .map(String::toUpperCase)
                     .filter(query -> query.startsWith("DELETE"))
                     .collect(Collectors.toList());
-            assertThat(updateOrDeleteQueryList).hasSize(1);
-            assertThat(updateOrDeleteQueryList.get(0)).matches(
+            assertThat(deleteQueryList).hasSize(1);
+            assertThat(deleteQueryList.get(0)).matches(
                     "DELETE FROM [\\w_$]*POST_COMMENT( \\w+)? WHERE ID=\\?");
         });
     }
