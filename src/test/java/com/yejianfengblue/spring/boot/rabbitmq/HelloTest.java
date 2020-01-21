@@ -7,6 +7,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.test.RabbitListenerTest;
+import org.springframework.amqp.rabbit.test.RabbitListenerTestHarness;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,6 +19,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
 import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.Mockito.verify;
 
 /**
  * A Rabbit MQ example where one sender publishes "hello world" and one receiver consumes message.
@@ -99,9 +105,11 @@ class HelloTest {
 
         static class RabbitmqReceiver {
 
+            static final String receiverId = "hello-receiver";
+
             private Logger log = LoggerFactory.getLogger(getClass());
 
-            @RabbitListener(queues = QUEUE_NAME)
+            @RabbitListener(id = receiverId, queues = QUEUE_NAME)
             void receive(String message) {
                 log.info("Receive '{}'", message);
             }
@@ -116,6 +124,28 @@ class HelloTest {
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
+        }
+
+        @TestConfiguration
+        @RabbitListenerTest
+        static class RabbitListenerTestConfig {}
+
+        @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
+        @Autowired
+        private RabbitListenerTestHarness rabbitListenerTestHarness;
+
+        @Autowired
+        private RabbitTemplate rabbitTemplate;
+
+        @Test
+        void givenRabbitListenerListeningOnQueue_whenSendToThatQueue_thenListenerMethodIsCalled() {
+
+            // convertSendAndReceive suspend the test thread, ensure @RabbitListener method is called
+            rabbitTemplate.convertSendAndReceive(QUEUE_NAME, "Hail Hydra");
+
+            RabbitmqReceiver rabbitmqReceiver = rabbitListenerTestHarness.getSpy(RabbitmqReceiver.receiverId);
+            assertNotNull(rabbitmqReceiver);
+            verify(rabbitmqReceiver).receive("Hail Hydra");
         }
     }
 }
