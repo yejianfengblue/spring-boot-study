@@ -2,6 +2,7 @@ package com.yejianfengblue.spring.boot.rabbitmq;
 
 import lombok.RequiredArgsConstructor;
 import org.junit.jupiter.api.Test;
+import org.mockito.BDDMockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Queue;
@@ -9,6 +10,7 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.rabbit.test.RabbitListenerTest;
 import org.springframework.amqp.rabbit.test.RabbitListenerTestHarness;
+import org.springframework.amqp.rabbit.test.mockito.LatchCountDownAndCallRealMethodAnswer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
@@ -21,7 +23,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.Mockito.verify;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.*;
 
 /**
  * A Rabbit MQ example where one sender publishes "hello world" and one receiver consumes message.
@@ -147,5 +150,25 @@ class HelloTest {
             assertNotNull(rabbitmqReceiver);
             verify(rabbitmqReceiver).receive("Hail Hydra");
         }
+
+        @Test
+        void givenLatchCountDownAndCallRealMethodAnswer_whenSendToQueue_thenAnswerCountDown() throws InterruptedException {
+
+
+            RabbitmqReceiver rabbitmqReceiver = rabbitListenerTestHarness.getSpy(RabbitmqReceiver.receiverId);
+            LatchCountDownAndCallRealMethodAnswer answer = new LatchCountDownAndCallRealMethodAnswer(2);
+            // given
+            BDDMockito.doAnswer(answer).when(rabbitmqReceiver).receive(anyString());  // use doAnswer() coz receive() return void
+
+            // when
+            rabbitTemplate.convertAndSend(QUEUE_NAME, "I am the bone of my sword");
+            rabbitTemplate.convertAndSend(QUEUE_NAME, "Steel is my body, and fire is my blood");
+
+            // then
+            assertTrue(answer.getLatch().await(10, TimeUnit.SECONDS));
+            BDDMockito.then(rabbitmqReceiver).should().receive("I am the bone of my sword");
+            BDDMockito.then(rabbitmqReceiver).should().receive("Steel is my body, and fire is my blood");
+        }
+
     }
 }
