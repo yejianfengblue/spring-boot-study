@@ -103,7 +103,7 @@ class DlxTest {
     private RabbitTemplate rabbitTemplate;
 
     @Test
-    void givenDeadLetterExchangeAndDeadLetterRoutingKey_whenRejectMessageAndDontRequeue_thenMessageIsRoutedToDlx() throws InterruptedException {
+    void givenDeadLetterExchangeAndDeadLetterRoutingKey_whenRejectMessageAndDontRequeue_thenMessageIsRepublishedToDlxWithDeadLetterRoutingKey() throws InterruptedException {
 
         byte[] message = ("hello at " + LocalDateTime.now().toString()).getBytes();
         rabbitTemplate.convertAndSend(EXCHANGE_NAME, QUEUE_NAME, message);

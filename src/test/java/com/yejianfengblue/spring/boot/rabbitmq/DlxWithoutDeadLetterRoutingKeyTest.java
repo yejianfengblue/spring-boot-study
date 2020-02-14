@@ -19,9 +19,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Monitor the message queue from RabbitMQ management UI, should see no redelivered.
- * The rejected message will be routed to the dead letter queue.
- *
  * @author yejianfengblue
  */
 @SpringBootTest
@@ -90,8 +87,14 @@ class DlxWithoutDeadLetterRoutingKeyTest {
     @Autowired
     private RabbitTemplate rabbitTemplate;
 
+    /**
+     * Because this test uses default exchange as DLX, when the dead letter routing key is omitted, the rejected
+     * message is republished to default exchange with its original routing key, and routed to the original message
+     * queue again.
+     * After test finishes, get message from RabbitMQ management UI, the field "count" in head "x-death" should be 7.
+     */
     @Test
-    void givenDeadLetterExchangeWithoutDeadLetterRoutingKey_whenRejectMessageAndDontRequeue_thenMessageIsRoutedTo() throws InterruptedException {
+    void givenDeadLetterExchangeWithoutDeadLetterRoutingKey_whenRejectMessageAndDontRequeue_thenMessageIsRepublishedToDlxWithOriginalKey() throws InterruptedException {
 
         byte[] message = ("hello at " + LocalDateTime.now().toString()).getBytes();
         rabbitTemplate.convertAndSend(EXCHANGE_NAME, QUEUE_NAME, message);
