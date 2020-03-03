@@ -5,6 +5,7 @@ import lombok.EqualsAndHashCode;
 import lombok.ToString;
 import net.ttddyy.dsproxy.asserts.PreparedExecution;
 import net.ttddyy.dsproxy.asserts.ProxyTestDataSource;
+import org.hibernate.LazyInitializationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 
 import static net.ttddyy.dsproxy.asserts.assertj.DataSourceAssertAssertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * @author yejianfengblue
@@ -28,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(properties = {
         "spring.jpa.properties.hibernate.generate_statistics=true"})
 @Import(ProxyTestDataSourceConfig.class)
-class OneToManyParentOwnedUnidirectionalRelationshipLazyFetchJoinColumnNotNullableTest {
+class OneToManyUnidirectionalRelationshipLazyFetchJoinColumnNotNullableTest {
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -89,13 +91,51 @@ class OneToManyParentOwnedUnidirectionalRelationshipLazyFetchJoinColumnNotNullab
         PostComment(String review) { this.review = review; }
     }
 
+    @Test
+    void givenOneToManyUnidirectionalRelationshipLazyFetch_whenFindOneSide_thenManySideCollectionAreNotFetched() {
+
+        // data preparation
+        Long createdPostId = transactionTemplate.execute(status -> {
+
+            Post post = new Post("Some post");
+            post.getPostCommentList().add(
+                    new PostComment("First comment")
+            );
+            post.getPostCommentList().add(
+                    new PostComment("Second comment")
+            );
+
+            entityManager.persist(post);
+            entityManager.flush();
+
+            return post.getId();
+        });
+
+        ptds.reset();  // reset query execution logging
+
+        transactionTemplate.executeWithoutResult(transactionStatus -> {
+
+            Post foundPost = entityManager.find(Post.class, createdPostId);
+
+            // then
+            assertThat(ptds).hasSelectCount(1);
+            List<String> selectQueryList = ptds.getPrepareds().stream()
+                    .map(PreparedExecution::getQuery)
+                    .map(String::toUpperCase)
+                    .filter(query -> query.startsWith("SELECT"))
+                    .collect(Collectors.toList());
+            assertThat(selectQueryList).hasSize(1);
+            assertThat(selectQueryList.get(0)).matches("SELECT .+ FROM [\\w_$]*POST( \\w+)? WHERE .+");
+        });
+    }
+
     /**
-     * The child records are inserted first WITH the foreign key, even though child entity doesn't store
-     * this info (no parent ref), but JPA vendor manages to provide the foreign key value
+     * The many-side records are inserted first WITH the foreign key, even though many-side entity doesn't have
+     * an one-side reference thus doesn't know the foreign key, but JPA vendor manages to provide the foreign key value
      * During the collection handling phase, the foreign key column is updated again.
      */
     @Test
-    void givenParentOwnedOneToManyUnidirectionalRelationship_whenSaveParentAlongWithChildren_thenChildrenAreFirstInsertedWithFkAndUpdateFkAgainInSeparateUpdateQuery() {
+    void givenOneToManyUnidirectionalRelationship_whenSaveOneSideAlongWithManySideCollection_thenManySideRecordsAreFirstInsertedWithFkAndFkIsUpdatedAgain() {
 
         // when
         transactionTemplate.executeWithoutResult(status -> {
@@ -129,10 +169,10 @@ class OneToManyParentOwnedUnidirectionalRelationshipLazyFetchJoinColumnNotNullab
     }
 
     /**
-     * Just one delete query deletes the removed child record due to orphanRemoval = true.
+     * Just one delete statement deletes the removed many-side records due to orphanRemoval = true.
      */
     @Test
-    void givenParentOwnedOneToManyUnidirectionalRelationshipAndParentSideLazyFetch_whenRemoveChild_thenOnlyOneDeleteStatementGetExecuted() {
+    void givenOneToManyUnidirectionalRelationship_whenRemoveManySide_thenOnlyOneDeleteStatementGetExecuted() {
 
         transactionTemplate.executeWithoutResult(status -> {
 
@@ -167,4 +207,84 @@ class OneToManyParentOwnedUnidirectionalRelationshipLazyFetchJoinColumnNotNullab
                     "DELETE FROM [\\w_$]*POST_COMMENT( \\w+)? WHERE ID=\\?");
         });
     }
+
+    @Test
+    void givenLazyFetchUninitializedCollection_whenUseThatCollectionOutOfOriginTransaction_thenLazyInitializationException() {
+
+        // data preparation
+        Long createdPostId = transactionTemplate.execute(status -> {
+
+            Post post = new Post("Some post");
+            post.getPostCommentList().add(
+                    new PostComment("First comment")
+            );
+            post.getPostCommentList().add(
+                    new PostComment("Second comment")
+            );
+
+            entityManager.persist(post);
+            entityManager.flush();
+
+            return post.getId();
+        });
+
+        // given
+        List<PostComment> foundPostCommentList = transactionTemplate.execute(transactionStatus -> {
+
+            Post foundPost = entityManager.find(Post.class, createdPostId);
+            return foundPost.getPostCommentList();
+        });
+
+        // then
+        assertThatThrownBy(() -> {
+            // when
+            foundPostCommentList.size();
+        }).isInstanceOf(LazyInitializationException.class)
+                .hasMessageContaining("no Session");
+    }
+
+    @Test
+    void givenLazyFetchUninitializedCollection_whenUseThatCollectionWithinSameTransaction_thenCollectionIsFetchedInSeparatedQuery() {
+
+        // data preparation
+        Long createdPostId = transactionTemplate.execute(status -> {
+
+            Post post = new Post("Some post");
+            post.getPostCommentList().add(
+                    new PostComment("First comment")
+            );
+            post.getPostCommentList().add(
+                    new PostComment("Second comment")
+            );
+
+            entityManager.persist(post);
+            entityManager.flush();
+
+            return post.getId();
+        });
+
+        transactionTemplate.executeWithoutResult(transactionStatus -> {
+
+            Post foundPost = entityManager.find(Post.class, createdPostId);
+            ptds.reset();  // reset query execution logging
+
+            // given
+            List<PostComment> postCommentList = foundPost.getPostCommentList();
+            assertThat(ptds).hasSelectCount(0);
+
+            // when
+            postCommentList.size();  // trigger select from post_comment
+
+            // then
+            assertThat(ptds).hasSelectCount(1);
+            List<String> selectQueryList = ptds.getPrepareds().stream()
+                    .map(PreparedExecution::getQuery)
+                    .map(String::toUpperCase)
+                    .filter(query -> query.startsWith("SELECT"))
+                    .collect(Collectors.toList());
+            assertThat(selectQueryList).hasSize(1);
+            assertThat(selectQueryList.get(0)).matches("SELECT .+ FROM [\\w_$]*POST_COMMENT( \\w+)? WHERE .+");
+        });
+    }
+
 }

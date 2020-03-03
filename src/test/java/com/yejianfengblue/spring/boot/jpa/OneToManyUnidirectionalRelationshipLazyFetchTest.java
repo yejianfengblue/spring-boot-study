@@ -15,10 +15,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import javax.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-import javax.persistence.*;
 
 import static net.ttddyy.dsproxy.asserts.assertj.DataSourceAssertAssertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @SpringBootTest(properties = {
         "spring.jpa.properties.hibernate.generate_statistics=true"})
 @Import(ProxyTestDataSourceConfig.class)
-class OneToManyParentOwnedUnidirectionalRelationshipLazyFetchTest {
+class OneToManyUnidirectionalRelationshipLazyFetchTest {
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -92,7 +92,7 @@ class OneToManyParentOwnedUnidirectionalRelationshipLazyFetchTest {
     }
 
     @Test
-    void givenParentOwnedOneToManyUnidirectionalRelationshipLazyFetch_whenFindParent_thenChildrenAreNotFetched() {
+    void givenOneToManyUnidirectionalRelationshipLazyFetch_whenFindOneSide_thenManySideCollectionAreNotFetched() {
 
         // data preparation
         Long createdPostId = transactionTemplate.execute(status -> {
@@ -127,6 +127,95 @@ class OneToManyParentOwnedUnidirectionalRelationshipLazyFetchTest {
             assertThat(selectQueryList).hasSize(1);
             assertThat(selectQueryList.get(0)).matches("SELECT .+ FROM [\\w_$]*POST( \\w+)? WHERE .+");
         });
+    }
+
+    /**
+     * The many-side records are inserted first without the foreign key, since many-side entity doesn't have
+     * an one-side reference thus doesn't know the foreign key.
+     * During the collection handling phase, the foreign key column is updated then.
+     */
+    @Test
+    void givenOneToManyUnidirectionalRelationship_whenSaveOneSideAlongWithManySideCollection_thenManySideAreFirstInsertedWithoutFkAndUpdateFkInSeparateUpdateQuery() {
+
+        // when
+        transactionTemplate.executeWithoutResult(status -> {
+
+            Post post = new Post("Some post");
+            post.getPostCommentList().add(
+                    new PostComment("First comment")
+            );
+            post.getPostCommentList().add(
+                    new PostComment("Second comment")
+            );
+
+            entityManager.persist(post);
+            entityManager.flush();
+        });
+
+        // then
+        assertThat(ptds).hasInsertCount(3);
+        assertThat(ptds).hasUpdateCount(2);
+        List<String> insertOrUpdateQueryList = ptds.getPrepareds().stream()
+                .map(PreparedExecution::getQuery)
+                .map(String::toUpperCase)
+                .filter(query -> query.startsWith("INSERT") || query.startsWith("UPDATE"))
+                .collect(Collectors.toList());
+        assertThat(insertOrUpdateQueryList).hasSize(5);
+        assertThat(insertOrUpdateQueryList.get(0)).matches("INSERT INTO [\\w_$]*POST( \\w+)? .+");
+        assertThat(insertOrUpdateQueryList.get(1)).matches("INSERT INTO [\\w_$]*POST_COMMENT( \\w+)? .+");
+        assertThat(insertOrUpdateQueryList.get(2)).matches("INSERT INTO [\\w_$]*POST_COMMENT( \\w+)? .+");
+        assertThat(insertOrUpdateQueryList.get(3)).matches("UPDATE [\\w_$]*POST_COMMENT( \\w+)? SET POST_ID=\\? WHERE ID=\\?");
+        assertThat(insertOrUpdateQueryList.get(4)).matches("UPDATE [\\w_$]*POST_COMMENT( \\w+)? SET POST_ID=\\? WHERE ID=\\?");
+    }
+
+    /**
+     * Update the foreign key to null to disassociate the relationship.
+     * Delete the removed record due to orphanRemoval = true.
+     */
+    @Test
+    void givenOneToManyUnidirectionalRelationship_whenRemoveManySideObjectFromCollection_thenManySideFkIsUpdatedToNullAndThenManySideRecordsAreDeleted() {
+
+        Long createdPostId = transactionTemplate.execute(status -> {
+
+            // data preparation
+            Post post = new Post("Some post");
+            post.getPostCommentList().add(
+                    new PostComment("First comment")
+            );
+            post.getPostCommentList().add(
+                    new PostComment("Second comment")
+            );
+
+            entityManager.persist(post);
+
+            return post.getId();
+        });
+
+        transactionTemplate.executeWithoutResult(status -> {
+
+            Post foundPost = entityManager.find(Post.class, createdPostId);
+
+            ptds.reset();  // reset query execution logging
+
+            // when
+            foundPost.getPostCommentList().remove(0);
+            // persist() and flush() are optional because post will be auto saved on transaction commit
+//            entityManager.persist(post);
+//            entityManager.flush();
+        });
+
+        assertThat(ptds).hasUpdateCount(1);
+        assertThat(ptds).hasDeleteCount(1);
+        List<String> updateOrDeleteQueryList = ptds.getPrepareds().stream()
+                .map(PreparedExecution::getQuery)
+                .map(String::toUpperCase)
+                .filter(query -> query.startsWith("UPDATE") || query.startsWith("DELETE"))
+                .collect(Collectors.toList());
+        assertThat(updateOrDeleteQueryList).hasSize(2);
+        assertThat(updateOrDeleteQueryList.get(0)).matches(
+                "UPDATE [\\w_$]*POST_COMMENT( \\w+)? SET POST_ID=NULL WHERE POST_ID=\\? AND ID=\\?");
+        assertThat(updateOrDeleteQueryList.get(1)).matches(
+                "DELETE FROM [\\w_$]*POST_COMMENT( \\w+)? WHERE ID=\\?");
     }
 
     @Test
@@ -208,85 +297,4 @@ class OneToManyParentOwnedUnidirectionalRelationshipLazyFetchTest {
         });
     }
 
-    /**
-     * The child records are inserted first without the foreign key, since child entity doesn't store
-     * this info (no parent ref).
-     * During the collection handling phase, the foreign key column is updated then.
-     */
-    @Test
-    void givenParentOwnedOneToManyUnidirectionalRelationship_whenSaveParentAlongWithChildren_thenChildrenAreFirstInsertedWithoutFkAndUpdateFkInSeparateUpdateQuery() {
-
-        // when
-        transactionTemplate.executeWithoutResult(status -> {
-
-            Post post = new Post("Some post");
-            post.getPostCommentList().add(
-                    new PostComment("First comment")
-            );
-            post.getPostCommentList().add(
-                    new PostComment("Second comment")
-            );
-
-            entityManager.persist(post);
-            entityManager.flush();
-        });
-
-        // then
-        assertThat(ptds).hasInsertCount(3);
-        assertThat(ptds).hasUpdateCount(2);
-        List<String> insertOrUpdateQueryList = ptds.getPrepareds().stream()
-                .map(PreparedExecution::getQuery)
-                .map(String::toUpperCase)
-                .filter(query -> query.startsWith("INSERT") || query.startsWith("UPDATE"))
-                .collect(Collectors.toList());
-        assertThat(insertOrUpdateQueryList).hasSize(5);
-        assertThat(insertOrUpdateQueryList.get(0)).matches("INSERT INTO [\\w_$]*POST( \\w+)? .+");
-        assertThat(insertOrUpdateQueryList.get(1)).matches("INSERT INTO [\\w_$]*POST_COMMENT( \\w+)? .+");
-        assertThat(insertOrUpdateQueryList.get(2)).matches("INSERT INTO [\\w_$]*POST_COMMENT( \\w+)? .+");
-        assertThat(insertOrUpdateQueryList.get(3)).matches("UPDATE [\\w_$]*POST_COMMENT( \\w+)? SET POST_ID=\\? WHERE ID=\\?");
-        assertThat(insertOrUpdateQueryList.get(4)).matches("UPDATE [\\w_$]*POST_COMMENT( \\w+)? SET POST_ID=\\? WHERE ID=\\?");
-    }
-
-    /**
-     * The update query sets child foreign key to null to disassociate the relationship.
-     * The delete query deletes the removed child record due to orphanRemoval = true.
-     */
-    @Test
-    void givenParentOwnedOneToManyUnidirectionalRelationshipAndParentSideLazyFetch_whenRemoveChild_thenChildFkIsSetToNullInUpdateQueryAndDeletedInDeleteQuery() {
-
-        transactionTemplate.executeWithoutResult(status -> {
-
-            // data preparation
-            Post post = new Post("Some post");
-            post.getPostCommentList().add(
-                    new PostComment("First comment")
-            );
-            post.getPostCommentList().add(
-                    new PostComment("Second comment")
-            );
-
-            entityManager.persist(post);
-            entityManager.flush();
-
-            ptds.reset();  // reset query execution logging
-
-            // when
-            post.getPostCommentList().remove(0);
-            entityManager.persist(post);
-            entityManager.flush();
-
-            assertThat(ptds).hasUpdateCount(1);
-            assertThat(ptds).hasDeleteCount(1);
-            List<String> updateOrDeleteQueryList = ptds.getPrepareds().stream()
-                    .map(PreparedExecution::getQuery)
-                    .map(String::toUpperCase)
-                    .filter(query -> query.startsWith("UPDATE") || query.startsWith("DELETE"))
-                    .collect(Collectors.toList());
-            assertThat(updateOrDeleteQueryList).hasSize(2);
-            assertThat(updateOrDeleteQueryList.get(0)).matches(
-                    "UPDATE [\\w_$]*POST_COMMENT( \\w+)? SET POST_ID=NULL WHERE POST_ID=\\? AND ID=\\?");
-            assertThat(updateOrDeleteQueryList.get(1)).matches(
-                    "DELETE FROM [\\w_$]*POST_COMMENT( \\w+)? WHERE ID=\\?");
-        });
-    }
 }

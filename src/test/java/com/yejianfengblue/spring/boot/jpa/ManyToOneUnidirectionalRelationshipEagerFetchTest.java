@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(properties = {
         "spring.jpa.properties.hibernate.generate_statistics=true"})
 @Import(ProxyTestDataSourceConfig.class)
-class ManyToOneUnidirectionalRelationshipLazyFetchTest {
+class ManyToOneUnidirectionalRelationshipEagerFetchTest {
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -82,7 +82,7 @@ class ManyToOneUnidirectionalRelationshipLazyFetchTest {
         @EqualsAndHashCode.Include
         private String review;
 
-        @ManyToOne(fetch = FetchType.LAZY, optional = false)
+        @ManyToOne(fetch = FetchType.EAGER, optional = false)
         @JoinColumn(name = "post_id")
         private Post post;
 
@@ -123,7 +123,7 @@ class ManyToOneUnidirectionalRelationshipLazyFetchTest {
     }
 
     @Test
-    void givenManyToOneUnidirectionalRelationshipLazyFetch_whenFindManySideEntity_thenOneSideIsNotAutoFetched() {
+    void givenManyToOneNotOptionalUnidirectionalRelationshipEagerFetch_whenFindManySideEntity_thenOneSideIsAutoFetchedViaInnerJoin() {
 
         Long createdFirstCommentId = transactionTemplate.execute(status -> {
 
@@ -157,50 +157,16 @@ class ManyToOneUnidirectionalRelationshipLazyFetchTest {
                 .filter(query -> query.startsWith("SELECT"))
                 .collect(Collectors.toList());
         assertThat(selectQueryList).hasSize(1);
-        assertThat(selectQueryList.get(0)).matches("SELECT .+ FROM [\\w_$]*POST_COMMENT( \\w+)? WHERE [\\w_$]*.ID=\\?");    }
-
-    @Test
-    void givenManyToOneUnidirectionalRelationshipLazyFetch_whenGetOneSideReferenceFromManySideEntity_thenOneSideIsFetchedByIdInSeparatedQuery() {
-
-        Long createdFirstCommentId = transactionTemplate.execute(status -> {
-
-            Post post = new Post("Some post");
-
-            PostComment firstComment = new PostComment("First comment");
-            firstComment.setPost(post);
-
-            PostComment secondComment = new PostComment("Second comment");
-            secondComment.setPost(post);
-
-            entityManager.persist(post);
-            entityManager.persist(firstComment);
-            entityManager.persist(secondComment);
-
-            return firstComment.getId();
-        });
-
-        ptds.reset();  // reset query execution logging
-
-        transactionTemplate.executeWithoutResult(transactionStatus -> {
-
-            PostComment foundFirstComment = entityManager.find(PostComment.class, createdFirstCommentId);
-            foundFirstComment.getPost().toString();
-        });
-
-        // then
-        assertThat(ptds).hasSelectCount(2);
-        List<String> selectQueryList = ptds.getPrepareds().stream()
-                .map(PreparedExecution::getQuery)
-                .map(String::toUpperCase)
-                .filter(query -> query.startsWith("SELECT"))
-                .collect(Collectors.toList());
-        assertThat(selectQueryList).hasSize(2);
-        assertThat(selectQueryList.get(0)).matches("SELECT .+ FROM [\\w_$]*POST_COMMENT( \\w+)? WHERE [\\w_$]*.ID=\\?");
-        assertThat(selectQueryList.get(1)).matches("SELECT .+ FROM [\\w_$]*POST( \\w+)? WHERE [\\w_$]*.ID=\\?");
+        assertThat(selectQueryList.get(0)).matches(
+                "SELECT .+ " +
+                        "FROM [\\w_$]*POST_COMMENT( [\\w_]+)? " +
+                        "INNER JOIN [\\w_$]*POST( [\\w_]+)? " +
+                        "ON [\\w_.=]+ " +
+                        "WHERE .+");
     }
 
     @Test
-    void givenManyToOneUnidirectionalRelationship_theManySideCollectionIsNotManagedAnymore_theManySideCollectionOfSpecificOneSideEntityCanBeFoundByOneSideId() {
+    void givenManyToOneUnidirectionalRelationshipEagerFetch_theManySideCollectionIsNotManagedAnymore_theManyEntitiesOfSpecificOneSideCanBeFoundByOneSideId_thenOneSideIsAutoFetchedInSeparatedQuery() {
 
         // data preparation
         Long createdPostId = transactionTemplate.execute(status -> {
@@ -235,20 +201,24 @@ class ManyToOneUnidirectionalRelationshipLazyFetchTest {
                     .getResultList();
 
             // then
-            assertThat(ptds).hasSelectCount(1);
+            assertThat(ptds).hasSelectCount(2);
             List<String> selectQueryList = ptds.getPrepareds().stream()
                     .map(PreparedExecution::getQuery)
                     .map(String::toUpperCase)
                     .filter(query -> query.startsWith("SELECT"))
                     .collect(Collectors.toList());
-            assertThat(selectQueryList).hasSize(1);
+            assertThat(selectQueryList).hasSize(2);
             assertThat(selectQueryList.get(0)).matches(
-                    "SELECT .+ FROM [\\w_$]*POST_COMMENT( \\w+)? WHERE ([\\w_$]+.)?POST_ID=\\?");
+                    "SELECT .+ " +
+                            "FROM [\\w_$]*POST_COMMENT( [\\w_]+)? " +
+                            "WHERE ([\\w_$]+.)?POST_ID=\\?");
+            assertThat(selectQueryList.get(1)).matches(
+                    "SELECT .+ FROM [\\w_$]*POST( \\w+)? WHERE ([\\w_$]+.)?ID=\\?");
         });
     }
 
     @Test
-    void givenManyToOneUnidirectionalRelationship_theManySideCollectionIsNotManagedAnymore_theManySideCollectionOfSpecificOneSideEntityCanBeFoundByOneSideReference() {
+    void givenManyToOneUnidirectionalRelationship_theManySideCollectionIsNotManagedAnymore_theManyEntitiesOfSpecificOneSideCanBeFoundByOneSideReference() {
 
         // data preparation
         Long createdPostId = transactionTemplate.execute(status -> {
@@ -296,6 +266,60 @@ class ManyToOneUnidirectionalRelationshipLazyFetchTest {
             assertThat(selectQueryList).hasSize(1);
             assertThat(selectQueryList.get(0)).matches(
                     "SELECT .+ FROM [\\w_$]*POST_COMMENT( \\w+)? WHERE ([\\w_$]+.)?POST_ID=\\?");
+        });
+    }
+
+    @Test
+    void givenManyToOneUnidirectionalRelationshipEagerFetch_whenFindAllManySideEntity_thenOneSelectAllFromManySide_AndForEachOneSideIdExecuteOneSelect() {
+
+        // data preparation
+        transactionTemplate.executeWithoutResult(status -> {
+
+            // clear all existing data because we will select * in next step
+            entityManager.createQuery(
+                    "DELETE FROM " + PostComment.class.getName() + " pc")
+                    .executeUpdate();
+
+            Post firstPost = new Post("First post");
+            entityManager.persist(firstPost);
+
+            PostComment firstComment = new PostComment("First comment");
+            firstComment.setPost(firstPost);
+            entityManager.persist(firstComment);
+
+            Post secondPost = new Post("Second post");
+            entityManager.persist(secondPost);
+
+            PostComment secondComment = new PostComment("Second comment");
+            secondComment.setPost(secondPost);
+            entityManager.persist(secondComment);
+        });
+
+        ptds.reset();  // reset query execution logging
+
+        transactionTemplate.executeWithoutResult(transactionStatus -> {
+
+            // when
+            List<PostComment> postCommentList = entityManager.createQuery(
+                    "SELECT pc " +
+                            "FROM " + PostComment.class.getName() + " pc",
+                    PostComment.class)
+                    .getResultList();
+
+            // then
+            assertThat(ptds).hasSelectCount(3);
+            List<String> selectQueryList = ptds.getPrepareds().stream()
+                    .map(PreparedExecution::getQuery)
+                    .map(String::toUpperCase)
+                    .filter(query -> query.startsWith("SELECT"))
+                    .collect(Collectors.toList());
+            assertThat(selectQueryList).hasSize(3);
+            assertThat(selectQueryList.get(0)).matches(
+                    "SELECT .+ FROM [\\w_$]*POST_COMMENT( [\\w_]+)?");
+            assertThat(selectQueryList.get(1)).matches(
+                    "SELECT .+ FROM [\\w_$]*POST( \\w+)? WHERE ([\\w_$]+.)?ID=\\?");
+            assertThat(selectQueryList.get(2)).matches(
+                    "SELECT .+ FROM [\\w_$]*POST( \\w+)? WHERE ([\\w_$]+.)?ID=\\?");
         });
     }
 
