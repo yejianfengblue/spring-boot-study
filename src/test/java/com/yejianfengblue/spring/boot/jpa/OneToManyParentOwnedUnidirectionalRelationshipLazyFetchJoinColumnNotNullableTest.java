@@ -14,10 +14,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import javax.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-import javax.persistence.*;
 
 import static net.ttddyy.dsproxy.asserts.assertj.DataSourceAssertAssertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -90,12 +90,12 @@ class OneToManyParentOwnedUnidirectionalRelationshipLazyFetchJoinColumnNotNullab
     }
 
     /**
-     * The child records are inserted first without the foreign key, since child entity doesn't store
-     * this info (no parent ref).
-     * During the collection handling phase, the foreign key column is updated then.
+     * The child records are inserted first WITH the foreign key, even though child entity doesn't store
+     * this info (no parent ref), but JPA vendor manages to provide the foreign key value
+     * During the collection handling phase, the foreign key column is updated again.
      */
     @Test
-    void givenParentOwnedOneToManyUnidirectionalRelationship_whenSaveParentAlongWithChildren_thenChildrenAreFirstInsertedWithoutFkAndUpdateFkInSeparateUpdateQuery() {
+    void givenParentOwnedOneToManyUnidirectionalRelationship_whenSaveParentAlongWithChildren_thenChildrenAreFirstInsertedWithFkAndUpdateFkAgainInSeparateUpdateQuery() {
 
         // when
         transactionTemplate.executeWithoutResult(status -> {
@@ -122,15 +122,14 @@ class OneToManyParentOwnedUnidirectionalRelationshipLazyFetchJoinColumnNotNullab
                 .collect(Collectors.toList());
         assertThat(insertOrUpdateQueryList).hasSize(5);
         assertThat(insertOrUpdateQueryList.get(0)).matches("INSERT INTO [\\w_$]*POST( \\w+)? .+");
-        assertThat(insertOrUpdateQueryList.get(1)).matches("INSERT INTO [\\w_$]*POST_COMMENT( \\w+)? .+");
-        assertThat(insertOrUpdateQueryList.get(2)).matches("INSERT INTO [\\w_$]*POST_COMMENT( \\w+)? .+");
+        assertThat(insertOrUpdateQueryList.get(1)).matches("INSERT INTO [\\w_$]*POST_COMMENT \\([\\w, ]*POST_ID[\\w, ]*\\) .+");
+        assertThat(insertOrUpdateQueryList.get(2)).matches("INSERT INTO [\\w_$]*POST_COMMENT \\([\\w, ]*POST_ID[\\w, ]*\\) .+");
         assertThat(insertOrUpdateQueryList.get(3)).matches("UPDATE [\\w_$]*POST_COMMENT( \\w+)? SET POST_ID=\\? WHERE ID=\\?");
         assertThat(insertOrUpdateQueryList.get(4)).matches("UPDATE [\\w_$]*POST_COMMENT( \\w+)? SET POST_ID=\\? WHERE ID=\\?");
     }
 
     /**
-     * The update query sets child foreign key to null to disassociate the relationship.
-     * The delete query deletes the removed child record due to orphanRemoval = true.
+     * Just one delete query deletes the removed child record due to orphanRemoval = true.
      */
     @Test
     void givenParentOwnedOneToManyUnidirectionalRelationshipAndParentSideLazyFetch_whenRemoveChild_thenOnlyOneDeleteStatementGetExecuted() {
