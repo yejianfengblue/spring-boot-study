@@ -1,10 +1,10 @@
-package com.yejianfengblue.spring.boot.jpa.equals;
+package com.yejianfengblue.spring.boot.jpa;
 
-import com.yejianfengblue.spring.boot.jpa.ProxyTestDataSourceConfig;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.LazyInitializationException;
 import org.hibernate.Session;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -68,12 +68,12 @@ class EqualsTest {
     @Autowired
     private EntityManager entityManager;
 
-    protected static interface EntityInterface {
+    private static interface EntityInterface {
 
         public Long getId();
     }
 
-    protected <T extends EntityInterface> void assertEqualityConsistency(Class<T> clazz, T entity) {
+    private <T extends EntityInterface> void assertEqualityConsistency(Class<T> clazz, T entity) {
 
         HashSet<T> entityHashSet = new HashSet<>();
 
