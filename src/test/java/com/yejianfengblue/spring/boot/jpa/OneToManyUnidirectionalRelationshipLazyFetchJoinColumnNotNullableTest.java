@@ -1,7 +1,6 @@
 package com.yejianfengblue.spring.boot.jpa;
 
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.ToString;
 import net.ttddyy.dsproxy.asserts.PreparedExecution;
 import net.ttddyy.dsproxy.asserts.ProxyTestDataSource;
@@ -18,6 +17,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import javax.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static net.ttddyy.dsproxy.asserts.assertj.DataSourceAssertAssertions.assertThat;
@@ -54,42 +54,81 @@ class OneToManyUnidirectionalRelationshipLazyFetchJoinColumnNotNullableTest {
 
     @Entity
     @Data
-    @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-    private static class Post {
+    private static class Post implements AssertEqualityConsistencyUtil.EntityInterface {
 
         @Id
         @GeneratedValue
         private Long id;
 
-        @EqualsAndHashCode.Include
         private String title;
 
+        // Mustn't use Set because PostComment doesn't have a business key and hashCode() always return same value
         @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
         @JoinColumn(name = "post_id", nullable = false)
         @ToString.Exclude
-        private List<PostComment> postCommentList = new ArrayList<>();
+        private List<PostComment> postComments = new ArrayList<>();
 
         Post() {}
 
         Post(String title) { this.title = title; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof Post)) return false;
+            Post post = (Post) o;
+            return Objects.equals(getId(), post.getId());
+        }
+
+        @Override
+        public int hashCode() {
+            return 31;
+        }
     }
 
     @Entity
     @Data
-    @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-    private static class PostComment {
+    private static class PostComment implements AssertEqualityConsistencyUtil.EntityInterface {
 
         @Id
         @GeneratedValue
         private Long id;
 
-        @EqualsAndHashCode.Include
         private String review;
 
         PostComment() {}
 
         PostComment(String review) { this.review = review; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof PostComment)) return false;
+            PostComment that = (PostComment) o;
+            return Objects.equals(getId(), that.getId());
+        }
+
+        @Override
+        public int hashCode() {
+            return 31;
+        }
     }
+
+    @Test
+    void testEqualityConsistency() {
+
+        Post post = new Post("Some post");
+        post.getPostComments().add(
+                new PostComment("First comment")
+        );
+        post.getPostComments().add(
+                new PostComment("Second comment")
+        );
+        AssertEqualityConsistencyUtil.assertEqualityConsistency(Post.class, post, transactionTemplate, entityManager);
+
+        // because post_comment.post_id is not nullable, so skip assert equality consistency for class PostComment
+    }
+
 
     @Test
     void givenOneToManyUnidirectionalRelationshipLazyFetch_whenFindOneSide_thenManySideCollectionAreNotFetched() {
@@ -98,10 +137,10 @@ class OneToManyUnidirectionalRelationshipLazyFetchJoinColumnNotNullableTest {
         Long createdPostId = transactionTemplate.execute(status -> {
 
             Post post = new Post("Some post");
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("First comment")
             );
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("Second comment")
             );
 
@@ -141,10 +180,10 @@ class OneToManyUnidirectionalRelationshipLazyFetchJoinColumnNotNullableTest {
         transactionTemplate.executeWithoutResult(status -> {
 
             Post post = new Post("Some post");
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("First comment")
             );
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("Second comment")
             );
 
@@ -178,10 +217,10 @@ class OneToManyUnidirectionalRelationshipLazyFetchJoinColumnNotNullableTest {
 
             // data preparation
             Post post = new Post("Some post");
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("First comment")
             );
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("Second comment")
             );
 
@@ -191,7 +230,7 @@ class OneToManyUnidirectionalRelationshipLazyFetchJoinColumnNotNullableTest {
             ptds.reset();  // reset query execution logging
 
             // when
-            post.getPostCommentList().remove(0);
+            post.getPostComments().remove(0);
             entityManager.persist(post);
             entityManager.flush();
 
@@ -215,10 +254,10 @@ class OneToManyUnidirectionalRelationshipLazyFetchJoinColumnNotNullableTest {
         Long createdPostId = transactionTemplate.execute(status -> {
 
             Post post = new Post("Some post");
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("First comment")
             );
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("Second comment")
             );
 
@@ -232,7 +271,7 @@ class OneToManyUnidirectionalRelationshipLazyFetchJoinColumnNotNullableTest {
         List<PostComment> foundPostCommentList = transactionTemplate.execute(transactionStatus -> {
 
             Post foundPost = entityManager.find(Post.class, createdPostId);
-            return foundPost.getPostCommentList();
+            return foundPost.getPostComments();
         });
 
         // then
@@ -250,10 +289,10 @@ class OneToManyUnidirectionalRelationshipLazyFetchJoinColumnNotNullableTest {
         Long createdPostId = transactionTemplate.execute(status -> {
 
             Post post = new Post("Some post");
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("First comment")
             );
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("Second comment")
             );
 
@@ -269,7 +308,7 @@ class OneToManyUnidirectionalRelationshipLazyFetchJoinColumnNotNullableTest {
             ptds.reset();  // reset query execution logging
 
             // given
-            List<PostComment> postCommentList = foundPost.getPostCommentList();
+            List<PostComment> postCommentList = foundPost.getPostComments();
             assertThat(ptds).hasSelectCount(0);
 
             // when

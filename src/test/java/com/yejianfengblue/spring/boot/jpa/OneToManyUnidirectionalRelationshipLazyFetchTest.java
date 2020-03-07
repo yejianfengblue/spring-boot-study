@@ -1,7 +1,6 @@
 package com.yejianfengblue.spring.boot.jpa;
 
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.ToString;
 import net.ttddyy.dsproxy.asserts.PreparedExecution;
 import net.ttddyy.dsproxy.asserts.ProxyTestDataSource;
@@ -18,8 +17,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 import javax.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
+import static com.yejianfengblue.spring.boot.jpa.AssertEqualityConsistencyUtil.EntityInterface;
+import static com.yejianfengblue.spring.boot.jpa.AssertEqualityConsistencyUtil.assertEqualityConsistency;
 import static net.ttddyy.dsproxy.asserts.assertj.DataSourceAssertAssertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,41 +56,80 @@ class OneToManyUnidirectionalRelationshipLazyFetchTest {
 
     @Entity
     @Data
-    @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-    private static class Post {
+    private static class Post implements EntityInterface {
 
         @Id
         @GeneratedValue
         private Long id;
 
-        @EqualsAndHashCode.Include
         private String title;
 
+        // Mustn't use Set because PostComment doesn't have a business key and hashCode() always return same value
         @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
         @JoinColumn(name = "post_id")
         @ToString.Exclude
-        private List<PostComment> postCommentList = new ArrayList<>();
+        private List<PostComment> postComments = new ArrayList<>();
 
         Post() {}
 
         Post(String title) { this.title = title; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof Post)) return false;
+            Post post = (Post) o;
+            return Objects.equals(getId(), post.getId());
+        }
+
+        public int hashCode() {
+            return 31;
+        }
+
     }
 
     @Entity
     @Data
-    @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-    private static class PostComment {
+    private static class PostComment implements EntityInterface {
 
         @Id
         @GeneratedValue
         private Long id;
 
-        @EqualsAndHashCode.Include
         private String review;
 
         PostComment() {}
 
         PostComment(String review) { this.review = review; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof PostComment)) return false;
+            PostComment that = (PostComment) o;
+            return Objects.equals(getId(), that.getId());
+        }
+
+        @Override
+        public int hashCode() {
+            return 31;
+        }
+    }
+
+    @Test
+    void testEqualityConsistency() {
+
+        Post post = new Post("Some post");
+        post.getPostComments().add(
+                new PostComment("First comment")
+        );
+        post.getPostComments().add(
+                new PostComment("Second comment")
+        );
+        assertEqualityConsistency(Post.class, post, transactionTemplate, entityManager);
+
+        PostComment postComment = new PostComment("Test comment");
+        assertEqualityConsistency(PostComment.class, postComment, transactionTemplate, entityManager);
     }
 
     @Test
@@ -98,10 +139,10 @@ class OneToManyUnidirectionalRelationshipLazyFetchTest {
         Long createdPostId = transactionTemplate.execute(status -> {
 
             Post post = new Post("Some post");
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("First comment")
             );
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("Second comment")
             );
 
@@ -141,10 +182,10 @@ class OneToManyUnidirectionalRelationshipLazyFetchTest {
         transactionTemplate.executeWithoutResult(status -> {
 
             Post post = new Post("Some post");
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("First comment")
             );
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("Second comment")
             );
 
@@ -179,10 +220,10 @@ class OneToManyUnidirectionalRelationshipLazyFetchTest {
 
             // data preparation
             Post post = new Post("Some post");
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("First comment")
             );
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("Second comment")
             );
 
@@ -198,10 +239,9 @@ class OneToManyUnidirectionalRelationshipLazyFetchTest {
             ptds.reset();  // reset query execution logging
 
             // when
-            foundPost.getPostCommentList().remove(0);
-            // persist() and flush() are optional because post will be auto saved on transaction commit
-//            entityManager.persist(post);
-//            entityManager.flush();
+            foundPost.getPostComments().remove(
+                    new ArrayList(foundPost.getPostComments()).get(0)
+            );
         });
 
         assertThat(ptds).hasUpdateCount(1);
@@ -225,10 +265,10 @@ class OneToManyUnidirectionalRelationshipLazyFetchTest {
         Long createdPostId = transactionTemplate.execute(status -> {
 
             Post post = new Post("Some post");
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("First comment")
             );
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("Second comment")
             );
 
@@ -239,16 +279,16 @@ class OneToManyUnidirectionalRelationshipLazyFetchTest {
         });
 
         // given
-        List<PostComment> foundPostCommentList = transactionTemplate.execute(transactionStatus -> {
+        List<PostComment> foundPostComments = transactionTemplate.execute(transactionStatus -> {
 
             Post foundPost = entityManager.find(Post.class, createdPostId);
-            return foundPost.getPostCommentList();
+            return foundPost.getPostComments();
         });
 
         // then
         assertThatThrownBy(() -> {
             // when
-            foundPostCommentList.size();
+            foundPostComments.size();
         }).isInstanceOf(LazyInitializationException.class)
                 .hasMessageContaining("no Session");
     }
@@ -260,10 +300,10 @@ class OneToManyUnidirectionalRelationshipLazyFetchTest {
         Long createdPostId = transactionTemplate.execute(status -> {
 
             Post post = new Post("Some post");
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("First comment")
             );
-            post.getPostCommentList().add(
+            post.getPostComments().add(
                     new PostComment("Second comment")
             );
 
@@ -279,11 +319,11 @@ class OneToManyUnidirectionalRelationshipLazyFetchTest {
             ptds.reset();  // reset query execution logging
 
             // given
-            List<PostComment> postCommentList = foundPost.getPostCommentList();
+            List<PostComment> postComments = foundPost.getPostComments();
             assertThat(ptds).hasSelectCount(0);
 
             // when
-            postCommentList.size();  // trigger select from post_comment
+            postComments.size();  // trigger select from post_comment
 
             // then
             assertThat(ptds).hasSelectCount(1);
