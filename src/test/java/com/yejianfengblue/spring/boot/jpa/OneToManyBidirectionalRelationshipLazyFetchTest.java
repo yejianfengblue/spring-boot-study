@@ -5,7 +5,6 @@ import lombok.EqualsAndHashCode;
 import lombok.ToString;
 import net.ttddyy.dsproxy.asserts.PreparedExecution;
 import net.ttddyy.dsproxy.asserts.ProxyTestDataSource;
-import org.hibernate.LazyInitializationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -15,14 +14,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import javax.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-import javax.persistence.*;
 
 import static net.ttddyy.dsproxy.asserts.assertj.DataSourceAssertAssertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The best way to map a @OneToMany association is to rely on the @ManyToOne side to propagate all entity state changes
@@ -53,10 +51,11 @@ class OneToManyBidirectionalRelationshipLazyFetchTest {
         ptds.reset();
     }
 
+    // assume post title is unique, so we use it as the business key
     @Entity
     @Data
     @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-    private static class Post {
+    private static class Post implements AssertEqualityConsistencyUtil.EntityInterface {
 
         @Id
         @GeneratedValue
@@ -71,7 +70,7 @@ class OneToManyBidirectionalRelationshipLazyFetchTest {
                 fetch = FetchType.LAZY,
                 orphanRemoval = true)
         @ToString.Exclude
-        private List<PostComment> postCommentList = new ArrayList<>();
+        private List<PostComment> postComments = new ArrayList<>();
 
         Post() {}
 
@@ -79,21 +78,22 @@ class OneToManyBidirectionalRelationshipLazyFetchTest {
 
         void addPostComment(PostComment postComment) {
 
-            postCommentList.add(postComment);
             postComment.setPost(this);
+            postComments.add(postComment);
         }
 
         void removePostComment(PostComment postComment) {
 
-            postCommentList.remove(postComment);
+            postComments.remove(postComment);
             postComment.setPost(null);
         }
     }
 
+    // assume review content must be unique, so we use review and post as business key
     @Entity
     @Data
     @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-    private static class PostComment {
+    private static class PostComment implements AssertEqualityConsistencyUtil.EntityInterface {
 
         @Id
         @GeneratedValue
@@ -102,13 +102,29 @@ class OneToManyBidirectionalRelationshipLazyFetchTest {
         @EqualsAndHashCode.Include
         private String review;
 
-        @ManyToOne(fetch = FetchType.LAZY, optional = false)
+        @ManyToOne(fetch = FetchType.EAGER, optional = false)
         @JoinColumn(name = "post_id")
+        @EqualsAndHashCode.Include
         private Post post;
 
         PostComment() {}
 
         PostComment(String review) { this.review = review; }
+    }
+
+    @Test
+    void testEqualityConsistency() {
+
+        Post post = new Post("Some post");
+        post.addPostComment(
+                new PostComment("First comment")
+        );
+        post.addPostComment(
+                new PostComment("Second comment")
+        );
+        AssertEqualityConsistencyUtil.assertEqualityConsistency(Post.class, post, transactionTemplate, entityManager);
+
+        // because post_comment.post_id is not nullable, so skip assert equality consistency for class PostComment
     }
 
     @Test
@@ -139,8 +155,8 @@ class OneToManyBidirectionalRelationshipLazyFetchTest {
                 .collect(Collectors.toList());
         assertThat(insertQueryList).hasSize(3);
         assertThat(insertQueryList.get(0)).matches("INSERT INTO [\\w_$]*POST( \\w+)? .+");
-        assertThat(insertQueryList.get(1)).matches("INSERT INTO [\\w_$]*POST_COMMENT( \\w+)? .+");
-        assertThat(insertQueryList.get(2)).matches("INSERT INTO [\\w_$]*POST_COMMENT( \\w+)? .+");
+        assertThat(insertQueryList.get(1)).matches("INSERT INTO [\\w_$]*POST_COMMENT \\([\\w, ]*POST_ID[\\w, ]*\\) .+");
+        assertThat(insertQueryList.get(2)).matches("INSERT INTO [\\w_$]*POST_COMMENT \\([\\w, ]*POST_ID[\\w, ]*\\) .+");
     }
 
     @Test
@@ -163,7 +179,7 @@ class OneToManyBidirectionalRelationshipLazyFetchTest {
             ptds.reset();  // reset query execution logging
 
             // when
-            post.removePostComment(post.getPostCommentList().get(0));
+            post.removePostComment(post.getPostComments().get(0));
             entityManager.persist(post);
             entityManager.flush();
 
@@ -180,118 +196,4 @@ class OneToManyBidirectionalRelationshipLazyFetchTest {
         });
     }
 
-    @Test
-    void givenOneToManySideLazyFetchUninitializedCollection_whenUseThatCollectionOutOfOriginTransaction_thenLazyInitializationException() {
-
-        // data preparation
-        Long createdPostId = transactionTemplate.execute(status -> {
-
-            Post post = new Post("Some post");
-            post.addPostComment(
-                    new PostComment("First comment")
-            );
-            post.addPostComment(
-                    new PostComment("Second comment")
-            );
-
-            entityManager.persist(post);
-            entityManager.flush();
-
-            return post.getId();
-        });
-
-        // given
-        List<PostComment> foundPostCommentList = transactionTemplate.execute(transactionStatus -> {
-
-            Post foundPost = entityManager.find(Post.class, createdPostId);
-            return foundPost.getPostCommentList();
-        });
-
-        // then
-        assertThatThrownBy(() -> {
-            // when
-            foundPostCommentList.size();
-        }).isInstanceOf(LazyInitializationException.class)
-                .hasMessageContaining("no Session");
-    }
-
-    @Test
-    void givenOneToManySideLazyFetchUninitializedCollection_whenUseThatCollectionWithinSameTransaction_thenCollectionIsFetchedInSeparatedQuery() {
-
-        // data preparation
-        Long createdPostId = transactionTemplate.execute(status -> {
-
-            Post post = new Post("Some post");
-            post.addPostComment(
-                    new PostComment("First comment")
-            );
-            post.addPostComment(
-                    new PostComment("Second comment")
-            );
-
-            entityManager.persist(post);
-            entityManager.flush();
-
-            return post.getId();
-        });
-
-        transactionTemplate.executeWithoutResult(transactionStatus -> {
-
-            Post foundPost = entityManager.find(Post.class, createdPostId);
-            ptds.reset();  // reset query execution logging
-
-            // given
-            List<PostComment> postCommentList = foundPost.getPostCommentList();
-            assertThat(ptds).hasSelectCount(0);
-
-            // when
-            postCommentList.size();  // trigger select from post_comment
-
-            // then
-            assertThat(ptds).hasSelectCount(1);
-            List<String> selectQueryList = ptds.getPrepareds().stream()
-                    .map(PreparedExecution::getQuery)
-                    .map(String::toUpperCase)
-                    .filter(query -> query.startsWith("SELECT"))
-                    .collect(Collectors.toList());
-            assertThat(selectQueryList).hasSize(1);
-            assertThat(selectQueryList.get(0)).matches("SELECT .+ FROM [\\w_$]*POST_COMMENT( \\w+)? WHERE .+");
-        });
-    }
-
-    @Test
-    void givenManyToOneSideLazyFetch_whenFindChild_thenParentIsNotAutoFetched() {
-
-        // data preparation
-        Long createdPostCommentId = transactionTemplate.execute(status -> {
-
-            Post post = new Post("Some post");
-            post.addPostComment(
-                    new PostComment("First comment")
-            );
-
-            entityManager.persist(post);
-            entityManager.flush();
-
-            return post.getPostCommentList().get(0).getId();
-        });
-
-        ptds.reset();  // reset query execution logging
-
-        transactionTemplate.executeWithoutResult(transactionStatus -> {
-
-            // when
-            PostComment foundPostComment = entityManager.find(PostComment.class, createdPostCommentId);
-
-            // then
-            assertThat(ptds).hasSelectCount(1);
-            List<String> selectQueryList = ptds.getPrepareds().stream()
-                    .map(PreparedExecution::getQuery)
-                    .map(String::toUpperCase)
-                    .filter(query -> query.startsWith("SELECT"))
-                    .collect(Collectors.toList());
-            assertThat(selectQueryList).hasSize(1);
-            assertThat(selectQueryList.get(0)).matches("SELECT .+ FROM [\\w_$]*POST_COMMENT( \\w+)? WHERE .+");
-        });
-    }
 }
