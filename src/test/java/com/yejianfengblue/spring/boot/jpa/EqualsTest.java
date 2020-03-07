@@ -199,6 +199,7 @@ class EqualsTest {
         private String title;
     }
 
+    @Disabled  // remove @Disable to run this test and see the failure
     @Test
     void givenEntityUsingDefaultObjectEqualsAndHashCode_whenTestEqualityConsistency_thenErrorTheEntityProxyIsNotEqualWithTheEntity() {
 
@@ -237,6 +238,7 @@ class EqualsTest {
         }
     }
 
+    @Disabled  // remove @Disable to run this test and see the failure
     @Test
     void givenEntityImplEqualsAndHashCodeWithEntityId_whenTestEqualityConsistency_thenErrorTheEntityIsNotFoundInTheSetAfterPersisted() {
 
