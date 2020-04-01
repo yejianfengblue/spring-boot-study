@@ -14,6 +14,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.event.AbstractMongoEventListener;
+import org.springframework.data.mongodb.core.mapping.event.BeforeConvertEvent;
 import org.springframework.data.mongodb.core.mapping.event.LoggingEventListener;
 import org.springframework.data.mongodb.repository.config.EnableMongoRepositories;
 
@@ -44,6 +46,11 @@ public class MongoEventListenerTest {
         LoggingEventListener mongoEventListener() {
             return new LoggingEventListener();
         }
+
+        @Bean
+        MyLiftcycleEventListener myLiftcycleEventListener() {
+            return new MyLiftcycleEventListener();
+        }
     }
 
     @Autowired
@@ -61,5 +68,14 @@ public class MongoEventListenerTest {
 
         log.info("When delete ----------------------------");
         mongoTemplate.remove(yugi);
+    }
+
+    @Slf4j
+    static class MyLiftcycleEventListener extends AbstractMongoEventListener<User> {
+
+        @Override
+        public void onBeforeConvert(BeforeConvertEvent<User> event) {
+            log.info("My customized onBeforeConvert: {}, username: {}", event.getSource(), event.getSource().getUsername());
+        }
     }
 }
