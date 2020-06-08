@@ -14,7 +14,7 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -70,12 +70,13 @@ class KafkaListener_ConsumerRecordMetadata_Test {
         assertThat(this.latch.await(10, TimeUnit.SECONDS)).isTrue();
     }
 
-    @Configuration
+    @TestConfiguration
     @EnableKafka
     static class TestKafkaConfig {
 
         @KafkaListener(topics = TOPIC, groupId = GROUP)
         void receive(@Payload String value,
+                     @Header(KafkaHeaders.GROUP_ID) String groupId,
                      ConsumerRecordMetadata metadata,
                      @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
                      @Header(KafkaHeaders.RECEIVED_PARTITION_ID) Integer partition,
@@ -86,6 +87,7 @@ class KafkaListener_ConsumerRecordMetadata_Test {
 
             latch.countDown();
 
+            assertThat(groupId).isEqualTo("consumer-record-metadata-test-group");
             assertThat(metadata.topic()).isEqualTo(TOPIC);
             assertThat(metadata.partition()).isEqualTo(partition);
             assertThat(metadata.hasTimestamp()).isTrue();
@@ -97,6 +99,7 @@ class KafkaListener_ConsumerRecordMetadata_Test {
             log.info("metadata.valueSize : {}", metadata.serializedValueSize());
 
             log.info("value : {}", value);
+
             log.info("topic : {}", topic);
             log.info("partition : {}", partition);
             log.info("timestampType : {}", timestampType);
