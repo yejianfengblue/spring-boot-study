@@ -287,7 +287,7 @@ public class SerDeserializableDecisionTest {
         // then
         objectMapper.disable(MapperFeature.INFER_PROPERTY_MUTATORS);
 
-        assertThatThrownBy( () -> objectMapper.readValue(
+        assertThatThrownBy(() -> objectMapper.readValue(
                 "{" +
                         "\"privateFieldWithGetter\" : \"1\"" +
                         "}", PojoPrivateFieldHavingGetter.class))
