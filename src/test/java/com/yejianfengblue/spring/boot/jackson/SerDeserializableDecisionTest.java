@@ -382,6 +382,49 @@ public class SerDeserializableDecisionTest {
         assertThat(updatedPojo.getReadOnlyField()).isEqualTo("initial value");
     }
 
+    private static class PojoPrivateFieldWithGetterWithJsonIgnoreSetterAndIncludedInJsonCreator {
+
+        private String readOnlyField;
+
+        @JsonCreator
+        public PojoPrivateFieldWithGetterWithJsonIgnoreSetterAndIncludedInJsonCreator(@JsonProperty("readOnlyField") String readOnlyField) {
+            this.readOnlyField = readOnlyField;
+        }
+
+        @JsonProperty
+        public String getReadOnlyField() {
+            return readOnlyField;
+        }
+
+        @JsonIgnore
+        public void setReadOnlyField(String readOnlyField) {
+            this.readOnlyField = readOnlyField;
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    void givenPrivateFieldWithGetterWithJsonIgnoreSetterAndIncludedInJsonCreator_whenDisableInferPropertyMutators_thenSerializableButErrorOnDeserialization() {
+
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        objectMapper.disable(MapperFeature.INFER_PROPERTY_MUTATORS);
+        objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+
+        assertCouldSerialize(objectMapper, PojoPrivateFieldWithGetterWithJsonIgnoreSetterAndIncludedInJsonCreator.class.getDeclaredField("readOnlyField")).isTrue();
+        assertCouldDeserialize(objectMapper, PojoPrivateFieldWithGetterWithJsonIgnoreSetterAndIncludedInJsonCreator.class.getDeclaredField("readOnlyField")).isTrue();
+
+        PojoPrivateFieldWithGetterWithJsonIgnoreSetterAndIncludedInJsonCreator pojo = new PojoPrivateFieldWithGetterWithJsonIgnoreSetterAndIncludedInJsonCreator("initial");
+        assertThat(pojo.getReadOnlyField()).isEqualTo("initial");
+
+        assertThatThrownBy(() -> objectMapper.readerForUpdating(pojo).readValue(
+                "{" +
+                        "\"readOnlyField\" : \"updated\"" +
+                        "}"))
+                .isInstanceOf(InvalidDefinitionException.class)
+                .hasMessageContaining("No fallback setter/field defined for creator property 'readOnlyField'");
+    }
+
     private static class PojoPrivateFieldReadOnly {
 
         @JsonProperty(access = JsonProperty.Access.READ_ONLY)
