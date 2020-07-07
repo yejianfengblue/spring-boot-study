@@ -381,4 +381,20 @@ public class SerDeserializableDecisionTest {
         assertThat(pojo.getReadOnlyField()).isEqualTo("initial value");
         assertThat(updatedPojo.getReadOnlyField()).isEqualTo("initial value");
     }
+
+    private static class PojoPrivateFieldReadOnly {
+
+        @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+        private String readOnlyField;
+    }
+
+    @SneakyThrows
+    @Test
+    void givenPrivateFieldAnnotatedWithJsonPropertyAccessReadOnly_thenSerializableButNotDeserializable() {
+
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        assertCouldSerialize(objectMapper, PojoPrivateFieldReadOnly.class.getDeclaredField("readOnlyField")).isTrue();
+        assertCouldDeserialize(objectMapper, PojoPrivateFieldReadOnly.class.getDeclaredField("readOnlyField")).isFalse();
+    }
 }
