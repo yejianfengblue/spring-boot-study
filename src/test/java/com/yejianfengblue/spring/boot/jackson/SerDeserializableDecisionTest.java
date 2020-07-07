@@ -1,6 +1,7 @@
 package com.yejianfengblue.spring.boot.jackson;
 
 import com.fasterxml.jackson.annotation.*;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -333,6 +334,10 @@ public class SerDeserializableDecisionTest {
 
         private String readOnlyField;
 
+        public PojoPrivateFieldWithGetterWithJsonIgnoreSetter() {
+            readOnlyField = "initial value";
+        }
+
         @JsonProperty
         public String getReadOnlyField() {
             return readOnlyField;
@@ -361,8 +366,19 @@ public class SerDeserializableDecisionTest {
         ObjectMapper objectMapper = new ObjectMapper();
 
         objectMapper.disable(MapperFeature.INFER_PROPERTY_MUTATORS);
+        objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
         assertCouldSerialize(objectMapper, PojoPrivateFieldWithGetterWithJsonIgnoreSetter.class.getDeclaredField("readOnlyField")).isTrue();
         assertCouldDeserialize(objectMapper, PojoPrivateFieldWithGetterWithJsonIgnoreSetter.class.getDeclaredField("readOnlyField")).isFalse();
+
+        PojoPrivateFieldWithGetterWithJsonIgnoreSetter pojo = new PojoPrivateFieldWithGetterWithJsonIgnoreSetter();
+        assertThat(pojo.getReadOnlyField()).isEqualTo("initial value");
+
+        PojoPrivateFieldWithGetterWithJsonIgnoreSetter updatedPojo = objectMapper.readerForUpdating(pojo).readValue(
+                "{" +
+                        "\"readOnlyField\" : \"updated value\"" +
+                        "}");
+        assertThat(pojo.getReadOnlyField()).isEqualTo("initial value");
+        assertThat(updatedPojo.getReadOnlyField()).isEqualTo("initial value");
     }
 }
