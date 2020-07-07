@@ -297,14 +297,14 @@ public class SerDeserializableDecisionTest {
 
     @AllArgsConstructor
     @NoArgsConstructor
-    private static class PojoPrivateFieldWithoutSetterAndIsJsonCreator {
+    private static class PojoPrivateFieldWithoutSetterAndInJsonCreator {
 
         private String privateField;
 
         private String privateFieldNotInJsonCreator;
 
         @JsonCreator
-        PojoPrivateFieldWithoutSetterAndIsJsonCreator(String privateField) {
+        PojoPrivateFieldWithoutSetterAndInJsonCreator(String privateField) {
             this.privateField = privateField;
         }
     }
@@ -315,7 +315,7 @@ public class SerDeserializableDecisionTest {
 
         ObjectMapper objectMapper = new ObjectMapper();
 
-        assertCouldDeserialize(objectMapper, PojoPrivateFieldWithoutSetterAndIsJsonCreator.class.getDeclaredField("privateField")).isFalse();
+        assertCouldDeserialize(objectMapper, PojoPrivateFieldWithoutSetterAndInJsonCreator.class.getDeclaredField("privateField")).isFalse();
     }
 
     @SneakyThrows
@@ -326,7 +326,7 @@ public class SerDeserializableDecisionTest {
 
         objectMapper.disable(MapperFeature.INFER_PROPERTY_MUTATORS);
 
-        assertCouldDeserialize(objectMapper, PojoPrivateFieldWithoutSetterAndIsJsonCreator.class.getDeclaredField("privateField")).isFalse();
+        assertCouldDeserialize(objectMapper, PojoPrivateFieldWithoutSetterAndInJsonCreator.class.getDeclaredField("privateField")).isFalse();
     }
 
 }
