@@ -329,4 +329,40 @@ public class SerDeserializableDecisionTest {
         assertCouldDeserialize(objectMapper, PojoPrivateFieldWithoutSetterAndInJsonCreator.class.getDeclaredField("privateField")).isFalse();
     }
 
+    private static class PojoPrivateFieldWithGetterWithJsonIgnoreSetter {
+
+        private String readOnlyField;
+
+        @JsonProperty
+        public String getReadOnlyField() {
+            return readOnlyField;
+        }
+
+        @JsonIgnore
+        public void setReadOnlyField(String readOnlyField) {
+            this.readOnlyField = readOnlyField;
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    void givenPrivateFieldWithGetterWithJsonIgnoreSetter_thenSerializableAndDeserializable() {
+
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        assertCouldSerialize(objectMapper, PojoPrivateFieldWithGetterWithJsonIgnoreSetter.class.getDeclaredField("readOnlyField")).isTrue();
+        assertCouldDeserialize(objectMapper, PojoPrivateFieldWithGetterWithJsonIgnoreSetter.class.getDeclaredField("readOnlyField")).isTrue();
+    }
+
+    @SneakyThrows
+    @Test
+    void givenPrivateFieldWithGetterWithJsonIgnoreSetter_whenDisableInferPropertyMutators_thenSerializableButNotDeserializable() {
+
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        objectMapper.disable(MapperFeature.INFER_PROPERTY_MUTATORS);
+
+        assertCouldSerialize(objectMapper, PojoPrivateFieldWithGetterWithJsonIgnoreSetter.class.getDeclaredField("readOnlyField")).isTrue();
+        assertCouldDeserialize(objectMapper, PojoPrivateFieldWithGetterWithJsonIgnoreSetter.class.getDeclaredField("readOnlyField")).isFalse();
+    }
 }
