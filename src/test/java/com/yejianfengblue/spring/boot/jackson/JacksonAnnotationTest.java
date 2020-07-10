@@ -229,6 +229,52 @@ class JacksonAnnotationTest {
     }
 
     // @JsonAlias defines one or more alternative names for a property during DEserialization
+    static class ClassWithDiffNameOnJsonGetterAndJsonSetter {
+
+        private String property;
+
+        @JsonCreator
+        public ClassWithDiffNameOnJsonGetterAndJsonSetter(@JsonProperty("property") String property) {
+            this.property = property;
+        }
+
+        @JsonGetter("x-property")
+        String getProperty() {
+            return property;
+        }
+
+        @JsonSetter("y-property")
+        void setProperty(String property) {
+            this.property = property;
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    void givenJsonGetterNameDiffWithJsonSetterName_thenSerializationUseJsonGetterName_deserializationUseJsonSetterName() {
+
+        assertThat(objectMapper.writeValueAsString(new ClassWithDiffNameOnJsonGetterAndJsonSetter("abc")))
+                .isEqualTo(
+                        "{\n" +
+                                "  \"x-property\" : \"abc\"\n" +
+                                "}"
+                );
+
+        assertThat(objectMapper.readValue(
+                "{\n" +
+                        "  \"property\" : \"abc\"\n" +
+                        "}",
+                ClassWithDiffNameOnJsonGetterAndJsonSetter.class).getProperty())
+                .isEqualTo("abc");
+
+        assertThat(objectMapper.readValue(
+                "{\n" +
+                        "  \"y-property\" : \"abc\"\n" +
+                        "}",
+                ClassWithDiffNameOnJsonGetterAndJsonSetter.class).getProperty())
+                .isEqualTo("abc");
+    }
+
     @NoArgsConstructor
     @AllArgsConstructor
     static class ClassWithPropertyAlias {
