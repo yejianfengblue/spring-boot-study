@@ -229,6 +229,99 @@ class JacksonAnnotationTest {
     }
 
     // @JsonAlias defines one or more alternative names for a property during DEserialization
+    @NoArgsConstructor
+    @AllArgsConstructor
+    static class ClassWithPropertyAlias {
+
+        @JsonAlias({"x-property", "y-property"})
+        @Getter
+        @Setter
+        private String property;
+    }
+
+    @Test
+    @SneakyThrows
+    void JsonAlias_defineAlternativeNameDuringDeserialization() {
+
+        assertThat(objectMapper.writeValueAsString(new ClassWithPropertyAlias("abc")))
+                .isEqualTo(
+                        "{\n" +
+                                "  \"property\" : \"abc\"\n" +
+                                "}"
+                );
+
+        assertThat(objectMapper.readValue(
+                "{\n" +
+                        "  \"property\" : \"abc\"\n" +
+                        "}",
+                ClassWithPropertyAlias.class).getProperty())
+                .isEqualTo("abc");
+
+        assertThat(objectMapper.readValue(
+                "{\n" +
+                        "  \"x-property\" : \"abc\"\n" +
+                        "}",
+                ClassWithPropertyAlias.class).getProperty())
+                .isEqualTo("abc");
+
+        assertThat(objectMapper.readValue(
+                "{\n" +
+                        "  \"y-property\" : \"abc\"\n" +
+                        "}",
+                ClassWithPropertyAlias.class).getProperty())
+                .isEqualTo("abc");
+    }
+
+    @NoArgsConstructor
+    @AllArgsConstructor
+    static class ClassWithPropertyAliasOnJsonSetter {
+
+        private String property;
+
+        @JsonGetter
+        String getProperty() {
+            return property;
+        }
+
+        @JsonSetter
+        @JsonAlias({"x-property", "y-property"})
+        void setProperty(String property) {
+            this.property = property;
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    void JsonAlias_onJsonSetter_defineAlternativeNameDuringDeserialization() {
+
+        assertThat(objectMapper.writeValueAsString(new ClassWithPropertyAliasOnJsonSetter("abc")))
+                .isEqualTo(
+                        "{\n" +
+                                "  \"property\" : \"abc\"\n" +
+                                "}"
+                );
+
+        assertThat(objectMapper.readValue(
+                "{\n" +
+                        "  \"property\" : \"abc\"\n" +
+                        "}",
+                ClassWithPropertyAliasOnJsonSetter.class).getProperty())
+                .isEqualTo("abc");
+
+        assertThat(objectMapper.readValue(
+                "{\n" +
+                        "  \"x-property\" : \"abc\"\n" +
+                        "}",
+                ClassWithPropertyAliasOnJsonSetter.class).getProperty())
+                .isEqualTo("abc");
+
+        assertThat(objectMapper.readValue(
+                "{\n" +
+                        "  \"y-property\" : \"abc\"\n" +
+                        "}",
+                ClassWithPropertyAliasOnJsonSetter.class).getProperty())
+                .isEqualTo("abc");
+    }
 
     // @JsonSerialize and @JsonDeserialize on class field specify the customized serializer and deserializer
 
