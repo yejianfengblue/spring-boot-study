@@ -369,6 +369,124 @@ class JacksonAnnotationTest {
                 .isEqualTo("abc");
     }
 
+
+    // https://stackoverflow.com/questions/62824847/creating-a-custom-jackson-property-naming-strategy
+    @AllArgsConstructor
+    @NoArgsConstructor
+    static class User_diff_name_on_JsonGetter_and_JsonSetter {
+
+        private String firstName;
+
+        @JsonGetter("firstName")
+        public String getFirstName(){
+            return firstName;
+        }
+
+        @JsonSetter("FIRST_NAME")
+        public void setFirstName(String firstName)
+        {
+            this.firstName=firstName;
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    void givenFirstNameHasDiffNameOnJsonGetterAndJsonSetter_whenSerialize_thenJsonGetterNameIsUsed() {
+
+        assertThat(objectMapper.writeValueAsString(new User_diff_name_on_JsonGetter_and_JsonSetter("Chris")))
+                .isEqualTo(
+                        "{\n" +
+                                "  \"firstName\" : \"Chris\"\n" +
+                                "}"
+                );
+    }
+
+    @Test
+    @SneakyThrows
+    void givenFirstNameHasDiffNameOnJsonGetterAndJsonSetter_whenDeserialize_thenJsonSetterNameIsUsed() {
+
+        assertThat(objectMapper.readValue(
+                "{\n" +
+                        "  \"FIRST_NAME\" : \"Chris\"\n" +
+                        "}",
+                User_diff_name_on_JsonGetter_and_JsonSetter.class).getFirstName())
+                .isEqualTo("Chris");
+    }
+
+
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Getter
+    @Setter
+    static class User_JsonAlias_on_field {
+
+        @JsonAlias("FIRST_NAME")
+        private String firstName;
+    }
+
+    @Test
+    @SneakyThrows
+    void givenFirstNameWithJsonAlias_whenSerialize_thenOfficialNameIsUsed() {
+
+        assertThat(objectMapper.writeValueAsString(new User_JsonAlias_on_field("Chris")))
+                .isEqualTo(
+                        "{\n" +
+                                "  \"firstName\" : \"Chris\"\n" +
+                                "}"
+                );
+    }
+
+    @Test
+    @SneakyThrows
+    void givenFirstNameWithJsonAlias_whenDeserialize_thenJsonAliasNameIsUsed() {
+
+        assertThat(objectMapper.readValue(
+                "{\n" +
+                        "  \"FIRST_NAME\" : \"Chris\"\n" +
+                        "}",
+                User_JsonAlias_on_field.class).getFirstName())
+                .isEqualTo("Chris");
+    }
+
+
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Getter
+    static class User_JsonAlias_on_JsonSetter {
+
+        private String firstName;
+
+        @JsonSetter
+        @JsonAlias("FIRST_NAME")
+        void setFirstName(String firstName) {
+            this.firstName = firstName;
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    void givenFirstNameWithJsonAliasOnJsonSetter_whenSerialize_thenOfficialNameIsUsed() {
+
+        assertThat(objectMapper.writeValueAsString(new User_JsonAlias_on_JsonSetter("Chris")))
+                .isEqualTo(
+                        "{\n" +
+                                "  \"firstName\" : \"Chris\"\n" +
+                                "}"
+                );
+    }
+
+    @Test
+    @SneakyThrows
+    void givenFirstNameWithJsonAliasOnJsonSetter_whenDeserialize_thenJsonAliasNameIsUsed() {
+
+        assertThat(objectMapper.readValue(
+                "{\n" +
+                        "  \"FIRST_NAME\" : \"Chris\"\n" +
+                        "}",
+                User_JsonAlias_on_JsonSetter.class).getFirstName())
+                .isEqualTo("Chris");
+    }
+
     // @JsonSerialize and @JsonDeserialize on class field specify the customized serializer and deserializer
 
     @JsonIgnoreProperties({"id"})
