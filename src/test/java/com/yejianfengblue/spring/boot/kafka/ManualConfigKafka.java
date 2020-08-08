@@ -10,11 +10,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
-import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.KafkaMessageListenerContainer;
@@ -28,12 +23,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
-@EnableAutoConfiguration(exclude = {
-        DataSourceAutoConfiguration.class,
-        DataSourceTransactionManagerAutoConfiguration.class,
-        HibernateJpaAutoConfiguration.class
-})
 @Slf4j
 class ManualConfigKafka {
 
@@ -41,7 +30,7 @@ class ManualConfigKafka {
 
     private static final String TOPIC = "manual-config-kafka-topic";
 
-    private final CountDownLatch waitMessageReceived = new CountDownLatch(3);
+    private static final CountDownLatch WAIT_MESSAGE_RECEIVED = new CountDownLatch(3);
 
     @Test
     @SneakyThrows
@@ -63,7 +52,7 @@ class ManualConfigKafka {
         kafkaTemplate.getProducerFactory().reset();
         log.info("Close existing producers");
 
-        assertThat(waitMessageReceived.await(1, TimeUnit.MINUTES)).isTrue();
+        assertThat(WAIT_MESSAGE_RECEIVED.await(1, TimeUnit.MINUTES)).isTrue();
 
         listenerContainer.stop();
         log.info("Listener STOP");
@@ -127,7 +116,7 @@ class ManualConfigKafka {
             public void onMessage(ConsumerRecord<String, String> message) {
 
                 log.info("Receive : {}", message);
-                waitMessageReceived.countDown();
+                WAIT_MESSAGE_RECEIVED.countDown();
             }
         });
 
