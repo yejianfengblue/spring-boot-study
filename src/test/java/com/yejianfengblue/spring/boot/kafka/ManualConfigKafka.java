@@ -2,8 +2,10 @@ package com.yejianfengblue.spring.boot.kafka;
 
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -13,10 +15,7 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
-import org.springframework.kafka.core.DefaultKafkaProducerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.KafkaMessageListenerContainer;
 import org.springframework.kafka.listener.MessageListener;
@@ -61,10 +60,15 @@ class ManualConfigKafka {
         kafkaTemplate.flush();
         log.info("flush");
 
+        kafkaTemplate.getProducerFactory().reset();
+        log.info("Close existing producers");
+
         assertThat(waitMessageReceived.await(1, TimeUnit.MINUTES)).isTrue();
 
         listenerContainer.stop();
         log.info("Listener STOP");
+
+        TimeUnit.SECONDS.sleep(10);
     }
 
     // Consumer config
@@ -73,6 +77,18 @@ class ManualConfigKafka {
 
         DefaultKafkaConsumerFactory<String, String> kafkaConsumerFactory =
                 new DefaultKafkaConsumerFactory<>(consumerProps());
+        kafkaConsumerFactory.addListener(new ConsumerFactory.Listener<String, String>() {
+            @Override
+            public void consumerAdded(String id, Consumer<String, String> consumer) {
+                log.info("Consumer with ID {} is added : {}", id, consumer);
+            }
+
+            @Override
+            public void consumerRemoved(String id, Consumer<String, String> consumer) {
+                log.info("Consumer with ID {} is removed : {}", id, consumer);
+            }
+        });
+
         // Single-threaded message listener container
         KafkaMessageListenerContainer<String, String> listenerContainer =
                 new KafkaMessageListenerContainer<>(kafkaConsumerFactory, containerProps());
@@ -122,7 +138,18 @@ class ManualConfigKafka {
 
     private KafkaTemplate<String, String> createTemplate() {
 
-        ProducerFactory<String, String> producerFactory = new DefaultKafkaProducerFactory<>(producerProps());
+        DefaultKafkaProducerFactory<String, String> producerFactory = new DefaultKafkaProducerFactory<>(producerProps());
+        producerFactory.addListener(new ProducerFactory.Listener<String, String>() {
+            @Override
+            public void producerAdded(String id, Producer<String, String> producer) {
+                log.info("Producer with ID {} is added : {}", id, producer);
+            }
+
+            @Override
+            public void producerRemoved(String id, Producer<String, String> producer) {
+                log.info("Producer with ID {} is removed : {}", id, producer);
+            }
+        });
         KafkaTemplate<String, String> kafkaTemplate = new KafkaTemplate<>(producerFactory);
         kafkaTemplate.setDefaultTopic(TOPIC);
 
