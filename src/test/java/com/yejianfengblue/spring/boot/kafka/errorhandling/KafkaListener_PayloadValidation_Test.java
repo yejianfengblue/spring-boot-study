@@ -1,4 +1,4 @@
-package com.yejianfengblue.spring.boot.kafka;
+package com.yejianfengblue.spring.boot.kafka.errorhandling;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -59,7 +59,7 @@ class KafkaListener_PayloadValidation_Test {
 
     @Test
     @SneakyThrows
-    void whenSendToTopic_thenKafkaListenerIsTriggered() {
+    void whenReceivedMessagePayloadValidationFail_thenKafkaListenerErrorHandlerIsCalled() {
 
         kafkaTemplate.send(TOPIC, objectMapper.writeValueAsString(new User("legalUsername")));
         assertThat(this.legalLatch.await(10, TimeUnit.SECONDS)).isTrue();
