@@ -26,10 +26,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(
         properties = {
                 "spring.kafka.bootstrap-servers=moped-03.srvs.cloudkafka.com:9094,moped-02.srvs.cloudkafka.com:9094,moped-01.srvs.cloudkafka.com:9094",
-                "spring.kafka.properties.security.protocol=SASL_SSL",
+                "spring.kafka.security.protocol=SASL_SSL",
                 "spring.kafka.properties.sasl.mechanism=SCRAM-SHA-256",
-                "spring.kafka.properties.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username='2g7x91l0' password='Ld9gFN1ckwuq9vATANhZA8anhM9YZKlE';",
+                "spring.kafka.jaas.enabled=true",
+                "spring.kafka.jaas.login-module=org.apache.kafka.common.security.scram.ScramLoginModule",
+                "spring.kafka.jaas.control-flag=required",
+                "spring.kafka.jaas.options.username=2g7x91l0",
+                "spring.kafka.jaas.options.password=Ld9gFN1ckwuq9vATANhZA8anhM9YZKlE",
                 "spring.kafka.consumer.group-id=2g7x91l0-consumers",
+                "spring.kafka.consumer.auto-offset-reset=earliest",
                 "cloudkarafka.topic=2g7x91l0-default"
         }
 )
