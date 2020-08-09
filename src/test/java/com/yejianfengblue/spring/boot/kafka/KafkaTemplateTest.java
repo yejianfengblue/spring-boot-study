@@ -20,9 +20,7 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerA
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.KafkaException;
-import org.springframework.kafka.core.DefaultKafkaProducerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.core.*;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.kafka.support.ProducerListener;
 import org.springframework.kafka.support.SendResult;
@@ -227,6 +225,88 @@ class KafkaTemplateTest {
 
                 @Override
                 public void onFailure(Throwable ex) {
+                    log.error("Failure", ex);
+                    failure.countDown();
+                }
+            });
+        })
+                .isInstanceOf(KafkaException.class)
+                .hasCauseInstanceOf(TimeoutException.class)
+                .hasMessageContaining(String.format("Topic %s not present in metadata after %d ms.", TOPIC, timeout));
+
+        assertThat(failure.await(10, TimeUnit.SECONDS)).isFalse();
+    }
+
+    /**
+     * Make sure a Kafka broker is running on localhost:9092 before running this test
+     */
+    @SneakyThrows
+    @Test
+    void whenSendSuccessfully_thenKafkaSendCallbackOnSuccessIsInvoked() {
+
+        CountDownLatch success = new CountDownLatch(1);
+
+        ListenableFuture listenableFuture = kafkaTemplate.send(MessageBuilder
+                .withPayload("Hello at " + LocalDateTime.now().toString())
+                .setHeader(KafkaHeaders.TOPIC, TOPIC)
+                .setHeader(KafkaHeaders.GROUP_ID, GROUP)
+                .setHeader(KafkaHeaders.MESSAGE_KEY, "1")
+                .build());
+
+        listenableFuture.addCallback(new KafkaSendCallback<String, String>() {
+            @SneakyThrows
+            @Override
+            public void onSuccess(SendResult<String, String> sendResult) {
+                log.info("Success. SendResult = {}", objectMapper.writeValueAsString(sendResult));
+                success.countDown();
+            }
+
+            @Override
+            public void onFailure(KafkaProducerException ex) {
+                log.error("Failure", ex);
+            }
+        });
+
+        assertThat(success.await(10, TimeUnit.SECONDS)).isTrue();
+    }
+
+    /**
+     * Make sure no Kafka broker is running on localhost:55555 before running this test
+     */
+    @SneakyThrows
+    @Test
+    void whenSendFailed_thenKafkaSendCallbackOnFailureIsNotInvoked() {
+
+        CountDownLatch failure = new CountDownLatch(1);
+
+        int timeout = 5_000;
+
+        Map<String, Object> producerProps = new HashMap<>();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:55555");
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        DefaultKafkaProducerFactory<String, String> producerFactory = new DefaultKafkaProducerFactory<>(producerProps);
+        KafkaTemplate kafkaTemplate = new KafkaTemplate(producerFactory,
+                Map.of("max.block.ms", timeout));
+
+        assertThatThrownBy(() -> {
+
+            ListenableFuture listenableFuture = kafkaTemplate.send(MessageBuilder
+                    .withPayload("Hello at " + LocalDateTime.now().toString())
+                    .setHeader(KafkaHeaders.TOPIC, TOPIC)
+                    .setHeader(KafkaHeaders.GROUP_ID, GROUP)
+                    .setHeader(KafkaHeaders.MESSAGE_KEY, "1")
+                    .build());
+
+            listenableFuture.addCallback(new KafkaSendCallback<String, String>() {
+                @SneakyThrows
+                @Override
+                public void onSuccess(SendResult<String, String> sendResult) {
+                    log.info("Success. SendResult = {}", objectMapper.writeValueAsString(sendResult));
+                }
+
+                @Override
+                public void onFailure(KafkaProducerException ex) {
                     log.error("Failure", ex);
                     failure.countDown();
                 }
