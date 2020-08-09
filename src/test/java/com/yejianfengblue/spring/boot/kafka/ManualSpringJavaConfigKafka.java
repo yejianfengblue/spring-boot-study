@@ -28,7 +28,9 @@ class ManualSpringJavaConfigKafka {
 
     private static final String SERVER = "localhost:9092";
 
-    private static final String TOPIC = "manual-config-kafka-topic";
+    private static final String TOPIC = "manual-spring-java-config-kafka-topic";
+
+    private static final String GROUP = "manual-spring-java-config-kafka-group";
 
     private static final CountDownLatch WAIT_MESSAGE_RECEIVED = new CountDownLatch(3);
 
@@ -36,13 +38,15 @@ class ManualSpringJavaConfigKafka {
     @SneakyThrows
     void manuallyConfigureKafkaConsumerAndProducer() {
 
+        log.info("START");
+
         // configure consumer side
-        KafkaMessageListenerContainer<String, String> listenerContainer = createContainer();
+        KafkaMessageListenerContainer<String, String> listenerContainer = createListenerContainer();
         listenerContainer.start();
-        log.info("Listener START");
 
         // configure producer side
-        KafkaTemplate<String, String> kafkaTemplate = createTemplate();
+        KafkaTemplate<String, String> kafkaTemplate = createKafkaTemplate();
+        kafkaTemplate.setDefaultTopic(TOPIC);
         kafkaTemplate.sendDefault("a", "A");
         kafkaTemplate.sendDefault("b", "B");
         kafkaTemplate.sendDefault("c", "C");
@@ -55,18 +59,17 @@ class ManualSpringJavaConfigKafka {
         assertThat(WAIT_MESSAGE_RECEIVED.await(1, TimeUnit.MINUTES)).isTrue();
 
         listenerContainer.stop();
-        log.info("Listener STOP");
 
         TimeUnit.SECONDS.sleep(10);
+
+        log.info("END");
     }
 
     // Consumer config
+    private ConsumerFactory<String, String> createConsumerFactory() {
 
-    private KafkaMessageListenerContainer<String, String> createContainer() {
-
-        DefaultKafkaConsumerFactory<String, String> kafkaConsumerFactory =
-                new DefaultKafkaConsumerFactory<>(consumerProps());
-        kafkaConsumerFactory.addListener(new ConsumerFactory.Listener<String, String>() {
+        DefaultKafkaConsumerFactory<String, String> consumerFactory = new DefaultKafkaConsumerFactory<>(consumerProps());
+        consumerFactory.addListener(new ConsumerFactory.Listener<String, String>() {
             @Override
             public void consumerAdded(String id, Consumer<String, String> consumer) {
                 log.info("Consumer with ID {} is added : {}", id, consumer);
@@ -78,9 +81,14 @@ class ManualSpringJavaConfigKafka {
             }
         });
 
+        return consumerFactory;
+    }
+
+    private KafkaMessageListenerContainer<String, String> createListenerContainer() {
+
         // Single-threaded message listener container
         KafkaMessageListenerContainer<String, String> listenerContainer =
-                new KafkaMessageListenerContainer<>(kafkaConsumerFactory, containerProps());
+                new KafkaMessageListenerContainer<>(createConsumerFactory(), containerProps());
 
         return listenerContainer;
     }
@@ -125,7 +133,14 @@ class ManualSpringJavaConfigKafka {
 
     // Producer config
 
-    private KafkaTemplate<String, String> createTemplate() {
+    private KafkaTemplate<String, String> createKafkaTemplate() {
+
+        KafkaTemplate<String, String> kafkaTemplate = new KafkaTemplate<>(createProducerFactory());
+
+        return kafkaTemplate;
+    }
+
+    private ProducerFactory<String, String> createProducerFactory() {
 
         DefaultKafkaProducerFactory<String, String> producerFactory = new DefaultKafkaProducerFactory<>(producerProps());
         producerFactory.addListener(new ProducerFactory.Listener<String, String>() {
@@ -139,10 +154,8 @@ class ManualSpringJavaConfigKafka {
                 log.info("Producer with ID {} is removed : {}", id, producer);
             }
         });
-        KafkaTemplate<String, String> kafkaTemplate = new KafkaTemplate<>(producerFactory);
-        kafkaTemplate.setDefaultTopic(TOPIC);
 
-        return kafkaTemplate;
+        return producerFactory;
     }
 
     /**
