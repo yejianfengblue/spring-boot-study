@@ -39,7 +39,8 @@ class ManualConfigKafka {
         // configure consumer side
         KafkaMessageListenerContainer<String, String> listenerContainer = createContainer();
         listenerContainer.start();
-        log.info("Listener START");
+        log.info("Sleep to wait for listener container to start");
+        TimeUnit.SECONDS.sleep(10);
 
         // configure producer side
         KafkaTemplate<String, String> kafkaTemplate = createTemplate();
@@ -97,7 +98,7 @@ class ManualConfigKafka {
         props.put(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
 
         return props;
     }

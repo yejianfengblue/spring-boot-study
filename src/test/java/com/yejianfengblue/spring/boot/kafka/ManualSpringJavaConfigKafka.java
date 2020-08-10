@@ -51,6 +51,9 @@ class ManualSpringJavaConfigKafka {
 
         log.info("START");
 
+        log.info("Sleep to wait for listener container to start");
+        TimeUnit.SECONDS.sleep(10);
+
         kafkaTemplate.setDefaultTopic(TOPIC);
         kafkaTemplate.sendDefault("a", "A");
         kafkaTemplate.sendDefault("b", "B");
@@ -128,7 +131,7 @@ class ManualSpringJavaConfigKafka {
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, SERVER);
             props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
             props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-            props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+            props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
 
             return props;
         }
