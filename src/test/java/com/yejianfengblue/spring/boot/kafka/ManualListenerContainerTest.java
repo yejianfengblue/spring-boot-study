@@ -18,6 +18,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.KafkaMessageListenerContainer;
 import org.springframework.kafka.listener.MessageListener;
+import org.springframework.kafka.support.LogIfLevelEnabled;
 import org.springframework.kafka.test.utils.ContainerTestUtils;
 
 import java.time.LocalDateTime;
@@ -58,6 +59,8 @@ class ManualListenerContainerTest {
             log.info("Receive : {}", message);
             WAIT_MESSAGE_RECEIVED.countDown();
         });
+        containerProperties.setCommitLogLevel(LogIfLevelEnabled.Level.INFO);
+
         KafkaMessageListenerContainer<String, String> listenerContainer = createListenerContainer(containerProperties);
         listenerContainer.start();
         // wait for listener container to be ready before send test message
@@ -65,10 +68,13 @@ class ManualListenerContainerTest {
 
         kafkaTemplate.setDefaultTopic(TOPIC);
         kafkaTemplate.sendDefault("Hello 1 at " + LocalDateTime.now().toString());
+        kafkaTemplate.flush();
+        TimeUnit.MILLISECONDS.sleep(100);
         kafkaTemplate.sendDefault("Hello 2 at " + LocalDateTime.now().toString());
+        kafkaTemplate.flush();
+        TimeUnit.MILLISECONDS.sleep(100);
         kafkaTemplate.sendDefault("Hello 3 at " + LocalDateTime.now().toString());
         kafkaTemplate.flush();
-        log.info("flush");
 
         assertThat(WAIT_MESSAGE_RECEIVED.await(1, TimeUnit.MINUTES)).isTrue();
 
