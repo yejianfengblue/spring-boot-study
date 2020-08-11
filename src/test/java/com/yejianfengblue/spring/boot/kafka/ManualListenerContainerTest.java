@@ -48,41 +48,6 @@ class ManualListenerContainerTest {
     @Autowired
     KafkaTemplate kafkaTemplate;
 
-    @Test
-    @SneakyThrows
-    void manuallyConfigureListenerContainer() {
-
-        ContainerProperties containerProperties = new ContainerProperties(TOPIC);
-        containerProperties.setGroupId(GROUP);
-        containerProperties.setClientId("9527");
-        containerProperties.setMessageListener((MessageListener<String, String>) message -> {
-            log.info("Receive : {}", message);
-            WAIT_MESSAGE_RECEIVED.countDown();
-        });
-        containerProperties.setCommitLogLevel(LogIfLevelEnabled.Level.INFO);
-
-        KafkaMessageListenerContainer<String, String> listenerContainer = createListenerContainer(containerProperties);
-        listenerContainer.start();
-        // wait for listener container to be ready before send test message
-        ContainerTestUtils.waitForAssignment(listenerContainer, 1);
-
-        kafkaTemplate.setDefaultTopic(TOPIC);
-        kafkaTemplate.sendDefault("Hello 1 at " + LocalDateTime.now().toString());
-        kafkaTemplate.flush();
-        TimeUnit.MILLISECONDS.sleep(100);
-        kafkaTemplate.sendDefault("Hello 2 at " + LocalDateTime.now().toString());
-        kafkaTemplate.flush();
-        TimeUnit.MILLISECONDS.sleep(100);
-        kafkaTemplate.sendDefault("Hello 3 at " + LocalDateTime.now().toString());
-        kafkaTemplate.flush();
-
-        assertThat(WAIT_MESSAGE_RECEIVED.await(1, TimeUnit.MINUTES)).isTrue();
-
-        listenerContainer.stop();
-        log.info("Sleep to wait for listener container to stop");
-        TimeUnit.SECONDS.sleep(1);
-    }
-
     private ConsumerFactory<String, String> createConsumerFactory() {
 
         DefaultKafkaConsumerFactory<String, String> consumerFactory = new DefaultKafkaConsumerFactory<>(consumerProps());
@@ -103,15 +68,6 @@ class ManualListenerContainerTest {
         return consumerFactory;
     }
 
-    private KafkaMessageListenerContainer<String, String> createListenerContainer(ContainerProperties containerProperties) {
-
-        // Single-threaded message listener container
-        KafkaMessageListenerContainer<String, String> listenerContainer =
-                new KafkaMessageListenerContainer<>(createConsumerFactory(), containerProperties);
-
-        return listenerContainer;
-    }
-
     /**
      * Kafka consumer properties such as server address, group ID, key value deserializer.
      * Keys are defined in {@link ConsumerConfig}.
@@ -125,6 +81,43 @@ class ManualListenerContainerTest {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
 
         return props;
+    }
+
+
+    @Test
+    @SneakyThrows
+    void manuallyConfigureListenerContainer() {
+
+        ContainerProperties containerProperties = new ContainerProperties(TOPIC);
+        containerProperties.setGroupId(GROUP);
+        containerProperties.setClientId("9527");
+        containerProperties.setMessageListener((MessageListener<String, String>) message -> {
+            log.info("Receive : {}", message);
+            WAIT_MESSAGE_RECEIVED.countDown();
+        });
+        containerProperties.setCommitLogLevel(LogIfLevelEnabled.Level.INFO);
+
+        KafkaMessageListenerContainer<String, String> listenerContainer =
+                new KafkaMessageListenerContainer<>(createConsumerFactory(), containerProperties);
+        listenerContainer.start();
+        // wait for listener container to be ready before send test message
+        ContainerTestUtils.waitForAssignment(listenerContainer, 1);
+
+        kafkaTemplate.setDefaultTopic(TOPIC);
+        kafkaTemplate.sendDefault("Hello 1 at " + LocalDateTime.now().toString());
+        kafkaTemplate.flush();
+        TimeUnit.MILLISECONDS.sleep(100);
+        kafkaTemplate.sendDefault("Hello 2 at " + LocalDateTime.now().toString());
+        kafkaTemplate.flush();
+        TimeUnit.MILLISECONDS.sleep(100);
+        kafkaTemplate.sendDefault("Hello 3 at " + LocalDateTime.now().toString());
+        kafkaTemplate.flush();
+
+        assertThat(WAIT_MESSAGE_RECEIVED.await(1, TimeUnit.MINUTES)).isTrue();
+
+        listenerContainer.stop();
+        log.info("Sleep to wait for listener container to stop");
+        TimeUnit.SECONDS.sleep(1);
     }
 
 }
