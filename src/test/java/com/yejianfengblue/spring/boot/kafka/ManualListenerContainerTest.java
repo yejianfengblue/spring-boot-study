@@ -43,8 +43,6 @@ class ManualListenerContainerTest {
 
     private static final String GROUP = "manual-listener-container-group";
 
-    private static final CountDownLatch WAIT_MESSAGE_RECEIVED = new CountDownLatch(3);
-
     @Autowired
     KafkaTemplate kafkaTemplate;
 
@@ -83,17 +81,18 @@ class ManualListenerContainerTest {
         return props;
     }
 
-
     @Test
     @SneakyThrows
     void manuallyConfigureListenerContainer() {
+
+        final CountDownLatch messageReceived = new CountDownLatch(3);
 
         ContainerProperties containerProperties = new ContainerProperties(TOPIC);
         containerProperties.setGroupId(GROUP);
         containerProperties.setClientId("9527");
         containerProperties.setMessageListener((MessageListener<String, String>) message -> {
             log.info("Receive : {}", message);
-            WAIT_MESSAGE_RECEIVED.countDown();
+            messageReceived.countDown();
         });
         containerProperties.setCommitLogLevel(LogIfLevelEnabled.Level.INFO);
 
@@ -113,11 +112,148 @@ class ManualListenerContainerTest {
         kafkaTemplate.sendDefault("Hello 3 at " + LocalDateTime.now().toString());
         kafkaTemplate.flush();
 
-        assertThat(WAIT_MESSAGE_RECEIVED.await(1, TimeUnit.MINUTES)).isTrue();
+        assertThat(messageReceived.await(1, TimeUnit.MINUTES)).isTrue();
 
         listenerContainer.stop();
         log.info("Sleep to wait for listener container to stop");
         TimeUnit.SECONDS.sleep(1);
     }
 
+    @Test
+    @SneakyThrows
+    void defaultAckModeIsBATCH_thenCommitOffsetAfterAllRecordsReturnedByPollAreProcessed() {
+
+        final CountDownLatch messageReceived = new CountDownLatch(9);
+
+        ContainerProperties containerProperties = new ContainerProperties(TOPIC);
+        containerProperties.setGroupId(GROUP);
+        containerProperties.setClientId("9527");
+        containerProperties.setMessageListener((MessageListener<String, String>) message -> {
+            log.info("Receive : {}", message);
+            messageReceived.countDown();
+        });
+        containerProperties.setCommitLogLevel(LogIfLevelEnabled.Level.INFO);
+
+        KafkaMessageListenerContainer<String, String> listenerContainer =
+                new KafkaMessageListenerContainer<>(createConsumerFactory(), containerProperties);
+        listenerContainer.start();
+        // wait for listener container to be ready before send test message
+        ContainerTestUtils.waitForAssignment(listenerContainer, 1);
+
+        kafkaTemplate.setDefaultTopic(TOPIC);
+        kafkaTemplate.sendDefault("1", "Hello 1 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("2", "Hello 2 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("3", "Hello 3 at " + LocalDateTime.now().toString());
+        kafkaTemplate.flush();
+        TimeUnit.MILLISECONDS.sleep(100);
+        kafkaTemplate.sendDefault("4", "Hello 4 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("5", "Hello 5 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("6", "Hello 6 at " + LocalDateTime.now().toString());
+        kafkaTemplate.flush();
+        TimeUnit.MILLISECONDS.sleep(100);
+        kafkaTemplate.sendDefault("7", "Hello 7 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("8", "Hello 8 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("9", "Hello 9 at " + LocalDateTime.now().toString());
+        kafkaTemplate.flush();
+
+        assertThat(messageReceived.await(1, TimeUnit.MINUTES)).isTrue();
+
+        listenerContainer.stop();
+        log.info("Sleep to wait for listener container to stop");
+        TimeUnit.SECONDS.sleep(1);
+    }
+
+    @Test
+    @SneakyThrows
+    void whenAckModeIsRECORD_thenCommitOffsetAfterEachRecordIsProcessed() {
+
+        final CountDownLatch messageReceived = new CountDownLatch(9);
+
+        ContainerProperties containerProperties = new ContainerProperties(TOPIC);
+        containerProperties.setGroupId(GROUP);
+        containerProperties.setClientId("9527");
+        containerProperties.setMessageListener((MessageListener<String, String>) message -> {
+            log.info("Receive : {}", message);
+            messageReceived.countDown();
+        });
+        containerProperties.setCommitLogLevel(LogIfLevelEnabled.Level.INFO);
+        containerProperties.setAckMode(ContainerProperties.AckMode.RECORD);
+
+        KafkaMessageListenerContainer<String, String> listenerContainer =
+                new KafkaMessageListenerContainer<>(createConsumerFactory(), containerProperties);
+        listenerContainer.start();
+        // wait for listener container to be ready before send test message
+        ContainerTestUtils.waitForAssignment(listenerContainer, 1);
+
+        kafkaTemplate.setDefaultTopic(TOPIC);
+        kafkaTemplate.sendDefault("1", "Hello 1 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("2", "Hello 2 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("3", "Hello 3 at " + LocalDateTime.now().toString());
+        kafkaTemplate.flush();
+        TimeUnit.MILLISECONDS.sleep(100);
+        kafkaTemplate.sendDefault("4", "Hello 4 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("5", "Hello 5 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("6", "Hello 6 at " + LocalDateTime.now().toString());
+        kafkaTemplate.flush();
+        TimeUnit.MILLISECONDS.sleep(100);
+        kafkaTemplate.sendDefault("7", "Hello 7 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("8", "Hello 8 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("9", "Hello 9 at " + LocalDateTime.now().toString());
+        kafkaTemplate.flush();
+
+        assertThat(messageReceived.await(1, TimeUnit.MINUTES)).isTrue();
+
+        listenerContainer.stop();
+        log.info("Sleep to wait for listener container to stop");
+        TimeUnit.SECONDS.sleep(1);
+    }
+
+    @Test
+    @SneakyThrows
+    void whenAckModeIsCOUNT_thenCommitOffsetAfterAllRecordsReturnedByPollHaveBeenProcessedAndackCountRecordsReceivedSinceLastCommit() {
+
+        final CountDownLatch messageReceived = new CountDownLatch(9);
+
+        ContainerProperties containerProperties = new ContainerProperties(TOPIC);
+        containerProperties.setGroupId(GROUP);
+        containerProperties.setClientId("9527");
+        containerProperties.setMessageListener((MessageListener<String, String>) message -> {
+            log.info("Receive : {}", message);
+            try {
+                TimeUnit.MILLISECONDS.sleep(100);
+            } catch (InterruptedException e) {}
+            messageReceived.countDown();
+        });
+        containerProperties.setCommitLogLevel(LogIfLevelEnabled.Level.INFO);
+        containerProperties.setAckMode(ContainerProperties.AckMode.COUNT);
+        containerProperties.setAckCount(4);
+
+        KafkaMessageListenerContainer<String, String> listenerContainer =
+                new KafkaMessageListenerContainer<>(createConsumerFactory(), containerProperties);
+        listenerContainer.start();
+        // wait for listener container to be ready before send test message
+        ContainerTestUtils.waitForAssignment(listenerContainer, 1);
+
+        kafkaTemplate.setDefaultTopic(TOPIC);
+        kafkaTemplate.sendDefault("1", "Hello 1 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("2", "Hello 2 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("3", "Hello 3 at " + LocalDateTime.now().toString());
+        kafkaTemplate.flush();
+        TimeUnit.MILLISECONDS.sleep(500);
+        kafkaTemplate.sendDefault("4", "Hello 4 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("5", "Hello 5 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("6", "Hello 6 at " + LocalDateTime.now().toString());
+        kafkaTemplate.flush();
+        TimeUnit.MILLISECONDS.sleep(500);
+        kafkaTemplate.sendDefault("7", "Hello 7 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("8", "Hello 8 at " + LocalDateTime.now().toString());
+        kafkaTemplate.sendDefault("9", "Hello 9 at " + LocalDateTime.now().toString());
+        kafkaTemplate.flush();
+
+        assertThat(messageReceived.await(1, TimeUnit.MINUTES)).isTrue();
+
+        listenerContainer.stop();
+        log.info("Sleep to wait for listener container to stop");
+        TimeUnit.SECONDS.sleep(1);
+    }
 }
