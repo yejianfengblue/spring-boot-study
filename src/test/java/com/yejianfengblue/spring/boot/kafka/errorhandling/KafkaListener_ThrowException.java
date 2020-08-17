@@ -15,6 +15,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.SeekToCurrentErrorHandler;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -63,14 +64,17 @@ class KafkaListener_ThrowException {
         }
     }
 
+    /**
+     * The exception log is thrown by {@link SeekToCurrentErrorHandler}
+     */
     @Test
     @SneakyThrows
-    void whenKafkaListenerThrowException_thenExceptionIsLoggedByDefaultAndNACK() {
+    void whenKafkaListenerThrowException_thenExceptionIsLoggedByDefaultAndRetry() {
 
         kafkaTemplate.send(topic, "1");
         kafkaTemplate.send(topic, "23");
         kafkaTemplate.send(topic, "4");
 
-        assertThat(WAIT_MESSAGE_RECEIVED.await(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(WAIT_MESSAGE_RECEIVED.await(30, TimeUnit.SECONDS)).isTrue();
     }
 }
