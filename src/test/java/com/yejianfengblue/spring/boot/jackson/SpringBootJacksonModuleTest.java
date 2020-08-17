@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
@@ -14,9 +16,9 @@ import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.hateoas.RepresentationModel;
 
 import java.io.IOException;
-import java.util.List;
 
 @SpringBootTest
 @Slf4j
@@ -29,54 +31,43 @@ class SpringBootJacksonModuleTest {
     @SneakyThrows
     void givenModuleBeanWithCustomSerializer_whenSerialize_thenCustomSerializerIsUsed() {
 
-        MyRepresentationModel model = new MyRepresentationModel("xyz", "www.google.com");
+        UserModel userModel = new UserModel("xyz", "XYZ");
 
-        log.info(objectMapper.writeValueAsString(model));
+        log.info(objectMapper.writeValueAsString(userModel));
     }
 
     @TestConfiguration
-    static class config {
+    static class JacksonCustomization {
 
         @Bean
-        Module myModule() {
-            return new MyRepresentationModelModule();
+        Module userModelModule() {
+            return new UserModelModule();
         }
     }
 
-    static class MyRepresentationModel<T> {
+    @Data
+    @AllArgsConstructor
+    static class UserModel extends RepresentationModel<UserModel> {
 
-        private final T content;
+        String username;
 
-        private final List<String> links;
-
-        MyRepresentationModel(T content, String... links) {
-
-            this.content = content;
-            this.links = List.of(links);
-        }
-
-        T getContent() {
-            return this.content;
-        }
-
-        List<String> getLinks() {
-            return this.links;
-        }
+        String password;
     }
 
-    static class MyRepresentationModelSerializer extends StdSerializer<MyRepresentationModel> {
+    static class UserModelSerializer extends StdSerializer<UserModel> {
 
-        MyRepresentationModelSerializer() {
-            super(MyRepresentationModel.class);
+        UserModelSerializer() {
+            super(UserModel.class);
         }
 
         @Override
-        public void serialize(MyRepresentationModel value, JsonGenerator gen, SerializerProvider provider) throws IOException {
+        public void serialize(UserModel value, JsonGenerator gen, SerializerProvider provider) throws IOException {
 
             gen.writeStartObject();  // {
 
             if (value != null) {
-                gen.writeStringField("content", value.getContent().toString());
+                gen.writeStringField("username", value.getUsername());
+                gen.writeStringField("password", value.getPassword());
             } else {
                 gen.writeNull();
             }
@@ -90,11 +81,11 @@ class SpringBootJacksonModuleTest {
      * Module will be picked up by
      * {@link JacksonAutoConfiguration.Jackson2ObjectMapperBuilderCustomizerConfiguration.StandardJackson2ObjectMapperBuilderCustomizer#configureModules(org.springframework.http.converter.json.Jackson2ObjectMapperBuilder)}
      */
-    static class MyRepresentationModelModule extends SimpleModule {
+    static class UserModelModule extends SimpleModule {
 
-        MyRepresentationModelModule() {
+        UserModelModule() {
 
-            addSerializer(MyRepresentationModel.class, new MyRepresentationModelSerializer());
+            addSerializer(UserModel.class, new UserModelSerializer());
         }
     }
 
