@@ -284,7 +284,7 @@ class SchedulerTest {
     @Test
     @DisplayName("Given durable non-concurrent job, after first trigger ends, " +
                  "when new trigger added to same jobDetail, " +
-                 "then latter trigger may fire before first trigger ends")
+                 "then latter trigger fire ok")
     @SneakyThrows
     void durableNonConcurrentJobAndMultipleTriggers() {
 
