@@ -111,6 +111,7 @@ class SchedulerTest {
         Thread.sleep(10_000);
 
     }
+
     @Test
     @DisplayName("After non-durable job completed, then jobDetail and trigger don't exist in scheduler")
     @SneakyThrows
@@ -280,7 +281,6 @@ class SchedulerTest {
 
     }
 
-
     @Test
     @DisplayName("Given durable non-concurrent job, after first trigger ends, " +
                  "when new trigger added to same jobDetail, " +
@@ -315,5 +315,38 @@ class SchedulerTest {
 
         Thread.sleep(30_000);
 
+    }
+
+    @Test
+    @DisplayName("Given durable non-concurrent job, " +
+                 "when schedule(jobDetail, trigger) with diff triggers, " +
+                 "then exception job already exists with key")
+    @SneakyThrows
+    void scheduleJobDetailAndTriggerMultipleTimes_thenExceptionJobAlreadyExists() {
+
+        // Schedule jobDetail and trigger
+        JobDetail jobDetail = JobBuilder.newJob(NonConcurrentSleepJob.class)
+                                        .storeDurably()
+                                        .build();
+        Trigger trigger = TriggerBuilder.newTrigger()
+                                        .forJob(jobDetail)
+                                        .withSchedule(SimpleScheduleBuilder
+                                                              .simpleSchedule()
+                                                              .withRepeatCount(2)
+                                                              .withIntervalInSeconds(2))
+                                        .build();
+        scheduler.scheduleJob(jobDetail, trigger);
+
+        Trigger trigger2 = TriggerBuilder.newTrigger()
+                                         .forJob(jobDetail)
+                                         .withSchedule(SimpleScheduleBuilder
+                                                               .simpleSchedule()
+                                                               .withRepeatCount(2)
+                                                               .withIntervalInSeconds(10))
+                                         .build();
+        assertThatThrownBy(() -> scheduler.scheduleJob(jobDetail, trigger2))
+                .isInstanceOf(ObjectAlreadyExistsException.class)
+                .hasMessage("Unable to store Job : '%s', because one already exists with this identification.",
+                            jobDetail.getKey());
     }
 }
