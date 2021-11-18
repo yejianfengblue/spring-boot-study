@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -24,11 +25,12 @@ import java.util.concurrent.atomic.AtomicInteger;
     // classes = QuartzJdbcStoreTest.Config.class,
     properties = {
                    "spring.quartz.job-store-type=jdbc",
-                   "spring.quartz.jdbc.initialize-schema=always",
+//                   "spring.quartz.jdbc.initialize-schema=always",
                    "spring.datasource.url=jdbc:h2:tcp://localhost/~/h2/quartz",
                    "spring.datasource.username=quartz",
                    "spring.datasource.password=quartz",
     })
+@Import(ProxyTestDataSourceConfig.class)
 @EnableAutoConfiguration
 @Slf4j
 class QuartzJdbcStoreTest {
@@ -80,9 +82,11 @@ class QuartzJdbcStoreTest {
                                                                            .repeatForever()
                                                                            .withIntervalInSeconds(2))
                                         .build();
+//        scheduler.deleteJobs(List.copyOf(scheduler.getJobKeys(GroupMatcher.anyGroup())));
+
         // scheduler.scheduleJob(jobDetail, trigger);
 
-        Thread.sleep(600_000);
+        Thread.sleep(10_000);
 
     }
 }
