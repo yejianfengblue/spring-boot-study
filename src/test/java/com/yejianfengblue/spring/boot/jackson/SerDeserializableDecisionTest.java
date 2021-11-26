@@ -209,6 +209,8 @@ public class SerDeserializableDecisionTest {
     void givenNonPublicFieldWithoutGetterSetter_whenEnableObjectMapperAutoDetect_thenDeserializable() {
 
         ObjectMapper objectMapper = new ObjectMapper();
+
+        // when
         objectMapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.NON_PRIVATE);
 
         // then
@@ -284,9 +286,10 @@ public class SerDeserializableDecisionTest {
 
         ObjectMapper objectMapper = new ObjectMapper();
 
-        // then
+        // when
         objectMapper.disable(MapperFeature.INFER_PROPERTY_MUTATORS);
 
+        // then
         assertThatThrownBy(() -> objectMapper.readValue(
                 "{" +
                         "\"privateFieldWithGetter\" : \"1\"" +
