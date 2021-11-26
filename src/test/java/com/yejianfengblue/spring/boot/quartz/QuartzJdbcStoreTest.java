@@ -7,13 +7,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.quartz.*;
+import org.quartz.impl.matchers.GroupMatcher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -26,11 +27,11 @@ import java.util.concurrent.atomic.AtomicInteger;
     properties = {
                    "spring.quartz.job-store-type=jdbc",
 //                   "spring.quartz.jdbc.initialize-schema=always",
-                   "spring.datasource.url=jdbc:h2:tcp://localhost/~/h2/quartz",
+                   "spring.datasource.url=jdbc:h2:tcp://localhost:22010/~/h2/quartz",
                    "spring.datasource.username=quartz",
                    "spring.datasource.password=quartz",
     })
-@Import(ProxyTestDataSourceConfig.class)
+//@Import(ProxyTestDataSourceConfig.class)
 @EnableAutoConfiguration
 @Slf4j
 class QuartzJdbcStoreTest {
@@ -82,9 +83,9 @@ class QuartzJdbcStoreTest {
                                                                            .repeatForever()
                                                                            .withIntervalInSeconds(2))
                                         .build();
-//        scheduler.deleteJobs(List.copyOf(scheduler.getJobKeys(GroupMatcher.anyGroup())));
+        scheduler.deleteJobs(List.copyOf(scheduler.getJobKeys(GroupMatcher.anyGroup())));
 
-        // scheduler.scheduleJob(jobDetail, trigger);
+//         scheduler.scheduleJob(jobDetail, trigger);
 
         Thread.sleep(10_000);
 
