@@ -11,6 +11,7 @@ import org.quartz.impl.StdSchedulerFactory;
 import org.quartz.impl.matchers.GroupMatcher;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -348,5 +349,53 @@ class SchedulerTest {
                 .isInstanceOf(ObjectAlreadyExistsException.class)
                 .hasMessage("Unable to store Job : '%s', because one already exists with this identification.",
                             jobDetail.getKey());
+    }
+
+    @DisallowConcurrentExecution
+    public static class NonConcurrentDataSleepJob implements Job {
+
+        private static AtomicInteger counter = new AtomicInteger(0);
+
+        public static String JOB_DATA_MAP_KEY_DESC = "DESC";
+
+        @Override
+        public void execute(JobExecutionContext context) throws JobExecutionException {
+
+            log.info("Trigger key = {}", context.getTrigger().getKey());
+            log.info("desc = {}", context.getMergedJobDataMap().getString(JOB_DATA_MAP_KEY_DESC));
+            log.info("{} Sleep 5s...", counter.incrementAndGet());
+
+            try {
+                Thread.sleep(5_000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    @Test
+    @DisplayName("Update job data map of existing job detail")
+    @SneakyThrows
+    void updateJobDataMap() {
+
+        JobDetail jobDetail = JobBuilder.newJob(NonConcurrentDataSleepJob.class)
+                                        .usingJobData(
+                                                NonConcurrentDataSleepJob.JOB_DATA_MAP_KEY_DESC, "desc1")
+                                        .build();
+        Trigger trigger = TriggerBuilder.newTrigger()
+                                        .forJob(jobDetail)
+                                        .withSchedule(
+                                                SimpleScheduleBuilder.simpleSchedule()
+                                                                     .withRepeatCount(2)
+                                                                     .withIntervalInSeconds(30))
+                                        .build();
+        scheduler.scheduleJob(jobDetail, trigger);
+
+        TimeUnit.SECONDS.sleep(10);
+
+        jobDetail.getJobDataMap().put(NonConcurrentDataSleepJob.JOB_DATA_MAP_KEY_DESC, "desc2");
+        scheduler.addJob(jobDetail, true, true);
+
+        TimeUnit.MINUTES.sleep(5);
+
     }
 }
