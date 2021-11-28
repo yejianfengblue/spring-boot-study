@@ -1,26 +1,34 @@
 package com.yejianfengblue.spring.boot.jackson;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonGetter;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.exc.InvalidDefinitionException;
+
+import org.junit.jupiter.api.Test;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
-
-import org.junit.jupiter.api.Test;
-
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 @Slf4j
 class ObjectMapperTest {
@@ -134,5 +142,61 @@ class ObjectMapperTest {
         assertThat(nullUpdatedObject).isSameAs(oldObject);
         assertThat(nullUpdatedObject.getId()).isEqualTo(1);
         assertThat(nullUpdatedObject.getDesc()).isNull();
+    }
+
+    @Getter
+    @ToString
+    static class User_usernameSetterWithJsonIgnore {
+
+        private String username;
+
+        private int money;
+
+        @JsonCreator
+        public User_usernameSetterWithJsonIgnore(@JsonProperty("username") String username,
+                                                 @JsonProperty("money") int money) {
+            this.username = username;
+            this.money = money;
+        }
+
+        @JsonGetter
+        public String getUsername() {
+            return username;
+        }
+
+        @JsonIgnore
+        private void setUsername(String username) {
+            this.username = username;
+        }
+
+        @JsonGetter
+        public int getMoney() {
+            return money;
+        }
+
+        @JsonSetter
+        public void setMoney(int money) {
+            this.money = money;
+        }
+    }
+
+    @Test
+    void givenObjectMapperDisableInferPropertyMutatorsDisableFailOnUnknownProperties_whenUpdateValue_thenNoFallbackSetter() throws JsonProcessingException {
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.disable(MapperFeature.INFER_PROPERTY_MUTATORS);
+        objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+
+        User_usernameSetterWithJsonIgnore createdUser = objectMapper.readValue(
+                "{ \"username\": \"a\", \"money\": 1 }", User_usernameSetterWithJsonIgnore.class);
+
+        User_usernameSetterWithJsonIgnore oldUser = new User_usernameSetterWithJsonIgnore("a", 1);
+        User_usernameSetterWithJsonIgnore userPatch = new User_usernameSetterWithJsonIgnore("b", 2);
+        log.info("oldUser json = {}", objectMapper.writeValueAsString(oldUser));
+
+        assertThatThrownBy(
+            () -> objectMapper.updateValue(oldUser, userPatch))
+            .isInstanceOf(InvalidDefinitionException.class)
+            .hasMessageContaining("No fallback setter/field defined for creator property 'username'");
     }
 }
