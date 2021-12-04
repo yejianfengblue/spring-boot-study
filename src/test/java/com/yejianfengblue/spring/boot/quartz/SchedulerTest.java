@@ -372,6 +372,7 @@ class SchedulerTest {
             }
         }
     }
+
     @Test
     @DisplayName("Update job data map of existing job detail")
     @SneakyThrows
@@ -396,6 +397,33 @@ class SchedulerTest {
         scheduler.addJob(jobDetail, true, true);
 
         TimeUnit.MINUTES.sleep(5);
+
+    }
+
+    @Test
+    @DisplayName("Delete job while the job has unfired trigger")
+    @SneakyThrows
+    void deleteJobWithUnfiredTrigger() {
+
+        JobDetail jobDetail = JobBuilder.newJob(NonConcurrentDataSleepJob.class)
+                                        .usingJobData(
+                                                NonConcurrentDataSleepJob.JOB_DATA_MAP_KEY_DESC, "desc1")
+                                        .build();
+        Trigger trigger = TriggerBuilder.newTrigger()
+                                        .forJob(jobDetail)
+                                        .withSchedule(
+                                                SimpleScheduleBuilder.simpleSchedule()
+                                                                     .withRepeatCount(2)
+                                                                     .withIntervalInSeconds(10))
+                                        .build();
+        scheduler.scheduleJob(jobDetail, trigger);
+
+        TimeUnit.SECONDS.sleep(5);
+
+        scheduler.deleteJob(jobDetail.getKey());
+        log.info("Job deleted");
+
+        TimeUnit.MINUTES.sleep(1);
 
     }
 }
