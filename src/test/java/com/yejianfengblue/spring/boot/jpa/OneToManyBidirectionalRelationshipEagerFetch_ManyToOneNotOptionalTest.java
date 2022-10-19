@@ -15,10 +15,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import javax.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-import javax.persistence.*;
 
 import static net.ttddyy.dsproxy.asserts.assertj.DataSourceAssertAssertions.assertThat;
 
@@ -51,10 +51,11 @@ class OneToManyBidirectionalRelationshipEagerFetch_ManyToOneNotOptionalTest {
         ptds.reset();
     }
 
+    // assume post title is unique, so we use it as the business key
     @Entity
     @Data
     @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-    private static class Post {
+    private static class Post implements AssertEqualityConsistencyUtil.EntityInterface {
 
         @Id
         @GeneratedValue
@@ -71,8 +72,7 @@ class OneToManyBidirectionalRelationshipEagerFetch_ManyToOneNotOptionalTest {
         @ToString.Exclude
         private List<PostComment> postCommentList = new ArrayList<>();
 
-        Post() {
-        }
+        Post() {}
 
         Post(String title) {
             this.title = title;
@@ -91,10 +91,11 @@ class OneToManyBidirectionalRelationshipEagerFetch_ManyToOneNotOptionalTest {
         }
     }
 
+    // assume review content must be unique, so we use review and post as business key
     @Entity
     @Data
     @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-    private static class PostComment {
+    private static class PostComment implements AssertEqualityConsistencyUtil.EntityInterface {
 
         @Id
         @GeneratedValue
@@ -107,12 +108,26 @@ class OneToManyBidirectionalRelationshipEagerFetch_ManyToOneNotOptionalTest {
         @JoinColumn(name = "post_id")
         private Post post;
 
-        PostComment() {
-        }
+        PostComment() {}
 
         PostComment(String review) {
             this.review = review;
         }
+    }
+
+    @Test
+    void testEqualityConsistency() {
+
+        Post post = new Post("Some post");
+        post.addPostComment(
+                new PostComment("First comment")
+        );
+        post.addPostComment(
+                new PostComment("Second comment")
+        );
+        AssertEqualityConsistencyUtil.assertEqualityConsistency(Post.class, post, transactionTemplate, entityManager);
+
+        // because post_comment.post_id is not nullable, so skip assert equality consistency for class PostComment
     }
 
     @Test

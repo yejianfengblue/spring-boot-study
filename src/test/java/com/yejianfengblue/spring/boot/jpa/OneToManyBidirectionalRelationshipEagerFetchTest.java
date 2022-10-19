@@ -15,10 +15,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import javax.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-import javax.persistence.*;
 
 import static net.ttddyy.dsproxy.asserts.assertj.DataSourceAssertAssertions.assertThat;
 
@@ -51,10 +51,11 @@ class OneToManyBidirectionalRelationshipEagerFetchTest {
         ptds.reset();
     }
 
+    // assume post title is unique, so we use it as the business key
     @Entity
     @Data
     @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-    private static class Post {
+    private static class Post implements AssertEqualityConsistencyUtil.EntityInterface {
 
         @Id
         @GeneratedValue
@@ -71,8 +72,7 @@ class OneToManyBidirectionalRelationshipEagerFetchTest {
         @ToString.Exclude
         private List<PostComment> postCommentList = new ArrayList<>();
 
-        Post() {
-        }
+        Post() {}
 
         Post(String title) {
             this.title = title;
@@ -80,8 +80,8 @@ class OneToManyBidirectionalRelationshipEagerFetchTest {
 
         void addPostComment(PostComment postComment) {
 
-            postCommentList.add(postComment);
             postComment.setPost(this);
+            postCommentList.add(postComment);
         }
 
         void removePostComment(PostComment postComment) {
@@ -91,10 +91,11 @@ class OneToManyBidirectionalRelationshipEagerFetchTest {
         }
     }
 
+    // assume review content must be unique, so we use review and post as business key
     @Entity
     @Data
     @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-    private static class PostComment {
+    private static class PostComment implements AssertEqualityConsistencyUtil.EntityInterface {
 
         @Id
         @GeneratedValue
@@ -103,16 +104,31 @@ class OneToManyBidirectionalRelationshipEagerFetchTest {
         @EqualsAndHashCode.Include
         private String review;
 
-        @ManyToOne(fetch = FetchType.EAGER)
+        @ManyToOne(fetch = FetchType.EAGER, optional = false)
         @JoinColumn(name = "post_id")
+        @EqualsAndHashCode.Include
         private Post post;
 
-        PostComment() {
-        }
+        PostComment() {}
 
         PostComment(String review) {
             this.review = review;
         }
+    }
+
+    @Test
+    void testEqualityConsistency() {
+
+        Post post = new Post("Some post");
+        post.addPostComment(
+                new PostComment("First comment")
+        );
+        post.addPostComment(
+                new PostComment("Second comment")
+        );
+        AssertEqualityConsistencyUtil.assertEqualityConsistency(Post.class, post, transactionTemplate, entityManager);
+
+        // because post_comment.post_id is not nullable, so skip assert equality consistency for class PostComment
     }
 
     @Test
@@ -194,7 +210,7 @@ class OneToManyBidirectionalRelationshipEagerFetchTest {
             Assertions.assertThat(selectQueryList.get(0)).matches(
                     "SELECT .+ " +
                             "FROM [\\w_$]*POST_COMMENT( [\\w_]+)? " +
-                            "LEFT OUTER JOIN [\\w_$]*POST( [\\w_]+)? " +
+                            "INNER JOIN [\\w_$]*POST( [\\w_]+)? " +
                             "ON [\\w_.=]+ " +
                             "WHERE .+");
         });
